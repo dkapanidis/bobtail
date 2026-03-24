@@ -9,6 +9,7 @@ type filterOptionsResponse struct {
 	Clusters   []string `json:"clusters"`
 	Namespaces []string `json:"namespaces"`
 	Kinds      []string `json:"kinds"`
+	Names      []string `json:"names"`
 }
 
 func (s *Server) getFilterOptions(w http.ResponseWriter, r *http.Request) {
@@ -16,6 +17,7 @@ func (s *Server) getFilterOptions(w http.ResponseWriter, r *http.Request) {
 		Clusters:   []string{},
 		Namespaces: []string{},
 		Kinds:      []string{},
+		Names:      []string{},
 	}
 
 	queryDistinct := func(column string) ([]string, error) {
@@ -48,6 +50,10 @@ func (s *Server) getFilterOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp.Kinds, err = queryDistinct("kind"); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if resp.Names, err = queryDistinct("name"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

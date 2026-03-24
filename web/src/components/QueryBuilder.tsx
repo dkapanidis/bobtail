@@ -48,6 +48,7 @@ export default function QueryBuilder() {
     clusters: [],
     namespaces: [],
     kinds: [],
+    names: [],
   });
   const [keys, setKeys] = useState<string[]>([]);
   const [kind, setKind] = useState("");

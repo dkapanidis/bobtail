@@ -13,6 +13,7 @@ export default function ResourceTable({ onSelect }: Props) {
     clusters: [],
     namespaces: [],
     kinds: [],
+    names: [],
   });
   const [filters, setFilters] = useState({
     cluster: "",
@@ -55,13 +56,11 @@ export default function ResourceTable({ onSelect }: Props) {
           options={options.kinds}
           onChange={(v) => setFilters((f) => ({ ...f, kind: v }))}
         />
-        <input
-          className="border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600 w-44"
-          placeholder="Search name..."
+        <FilterInput
+          label="name"
           value={filters.name}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, name: e.target.value }))
-          }
+          options={options.names}
+          onChange={(v) => setFilters((f) => ({ ...f, name: v }))}
         />
         {(filters.cluster || filters.namespace || filters.kind || filters.name) && (
           <button

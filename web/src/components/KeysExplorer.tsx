@@ -22,6 +22,7 @@ export default function KeysExplorer({ onSelectResource }: Props) {
     clusters: [],
     namespaces: [],
     kinds: [],
+    names: [],
   });
   const [allKeys, setAllKeys] = useState<string[]>([]);
   const [entries, setEntries] = useState<KeyValueEntry[]>([]);
@@ -123,13 +124,11 @@ export default function KeysExplorer({ onSelectResource }: Props) {
             options={options.namespaces}
             onChange={(v) => setFilters((f) => ({ ...f, namespace: v }))}
           />
-          <input
-            className="border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600 w-44"
-            placeholder="Search name..."
+          <FilterInput
+            label="name"
             value={filters.name}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, name: e.target.value }))
-            }
+            options={options.names}
+            onChange={(v) => setFilters((f) => ({ ...f, name: v }))}
           />
           {hasFilters && (
             <button

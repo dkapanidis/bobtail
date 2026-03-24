@@ -36,6 +36,7 @@ export interface FilterOptions {
   clusters: string[];
   namespaces: string[];
   kinds: string[];
+  names: string[];
 }
 
 export interface GroupByResult {
