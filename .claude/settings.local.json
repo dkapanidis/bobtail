@@ -10,7 +10,11 @@
       "Bash(npm create:*)",
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(cd:*)",
+      "Bash(curl -s \"localhost:8080/api/query?kind=PostgresCluster&groupBy=spec.postgresVersion&filterKey=spec.instances%5B0%5D.replicas&filterOp=eq&filterValue=3\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(sqlite3:*)"
     ]
   }
 }

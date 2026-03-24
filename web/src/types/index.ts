@@ -37,3 +37,13 @@ export interface FilterOptions {
   namespaces: string[];
   kinds: string[];
 }
+
+export interface GroupByResult {
+  value: string;
+  count: number;
+}
+
+export interface TimeseriesPoint {
+  date: string;
+  values: Record<string, number>;
+}

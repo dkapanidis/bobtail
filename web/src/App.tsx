@@ -2,8 +2,9 @@ import { useState } from "react";
 import Dashboard from "./components/Dashboard";
 import ResourceTable from "./components/ResourceTable";
 import ResourceDetail from "./components/ResourceDetail";
+import QueryBuilder from "./components/QueryBuilder";
 
-type View = "dashboard" | "resources" | "detail";
+type View = "dashboard" | "resources" | "detail" | "query";
 
 function App() {
   const [view, setView] = useState<View>("dashboard");
@@ -29,6 +30,12 @@ function App() {
           >
             Resources
           </button>
+          <button
+            className={`text-sm ${view === "query" ? "font-semibold text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+            onClick={() => setView("query")}
+          >
+            Query
+          </button>
         </div>
       </nav>
 
@@ -51,6 +58,7 @@ function App() {
             }}
           />
         )}
+        {view === "query" && <QueryBuilder />}
       </main>
     </div>
   );

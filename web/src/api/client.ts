@@ -1,4 +1,11 @@
-import type { Resource, ResourceDetail, Stats, FilterOptions } from "../types";
+import type {
+  Resource,
+  ResourceDetail,
+  Stats,
+  FilterOptions,
+  GroupByResult,
+  TimeseriesPoint,
+} from "../types";
 
 const BASE = "/api";
 
@@ -33,5 +40,44 @@ export async function fetchResources(params?: {
 
 export async function fetchResource(id: number): Promise<ResourceDetail> {
   const res = await fetch(`${BASE}/resources/${id}`);
+  return res.json();
+}
+
+export async function fetchKeys(kind: string): Promise<string[]> {
+  const res = await fetch(`${BASE}/keys?kind=${encodeURIComponent(kind)}`);
+  return res.json();
+}
+
+export interface QueryParams {
+  kind: string;
+  groupBy: string;
+  filterKey?: string;
+  filterOp?: string;
+  filterValue?: string;
+  start?: string;
+  end?: string;
+  interval?: string;
+}
+
+function buildQueryString(params: QueryParams): URLSearchParams {
+  const q = new URLSearchParams();
+  q.set("kind", params.kind);
+  q.set("groupBy", params.groupBy);
+  if (params.filterKey) q.set("filterKey", params.filterKey);
+  if (params.filterOp) q.set("filterOp", params.filterOp);
+  if (params.filterValue) q.set("filterValue", params.filterValue);
+  if (params.start) q.set("start", params.start);
+  if (params.end) q.set("end", params.end);
+  if (params.interval) q.set("interval", params.interval);
+  return q;
+}
+
+export async function fetchGroupBy(params: QueryParams): Promise<GroupByResult[]> {
+  const res = await fetch(`${BASE}/query?${buildQueryString(params)}`);
+  return res.json();
+}
+
+export async function fetchTimeseries(params: QueryParams): Promise<TimeseriesPoint[]> {
+  const res = await fetch(`${BASE}/query/timeseries?${buildQueryString(params)}`);
   return res.json();
 }
