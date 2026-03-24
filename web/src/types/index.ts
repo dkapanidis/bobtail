@@ -47,3 +47,17 @@ export interface TimeseriesPoint {
   date: string;
   values: Record<string, number>;
 }
+
+export interface KeyValueEntry {
+  cluster: string;
+  namespace: string;
+  kind: string;
+  name: string;
+  key: string;
+  value: string;
+  valueInt?: number;
+  valueFloat?: number;
+  firstSeen: string;
+  lastSeen: string;
+  resourceId: number;
+}
