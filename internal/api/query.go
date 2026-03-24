@@ -7,6 +7,14 @@ import (
 	"strconv"
 )
 
+// resourceLevelFields maps groupBy values that refer to columns on the resources table.
+var resourceLevelFields = map[string]string{
+	"kind":      "r.kind",
+	"cluster":   "r.cluster",
+	"namespace": "r.namespace",
+	"name":      "r.name",
+}
+
 type groupByResult struct {
 	Value string `json:"value"`
 	Count int    `json:"count"`
@@ -59,30 +67,48 @@ func (s *Server) getKeys(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/query?kind=PostgresCluster&groupBy=spec.postgresVersion&filterKey=...&filterOp=...&filterValue=...
 // Returns counts grouped by the value of groupBy key.
+// kind is optional (omit or use "*" for all resources).
+// groupBy can be a resource field (kind, cluster, namespace, name) or a key-value key.
 func (s *Server) queryGroupBy(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	groupBy := r.URL.Query().Get("groupBy")
-	if kind == "" || groupBy == "" {
-		http.Error(w, "kind and groupBy parameters required", http.StatusBadRequest)
+	if groupBy == "" {
+		http.Error(w, "groupBy parameter required", http.StatusBadRequest)
 		return
 	}
 
-	query := `
-		SELECT grp.value, COUNT(DISTINCT grp.resource_id) as cnt
-		FROM resource_values grp
-		JOIN resources r ON r.id = grp.resource_id
-		INNER JOIN (
-			SELECT resource_id, key, MAX(last_seen) as max_ls
-			FROM resource_values GROUP BY resource_id, key
-		) latest ON grp.resource_id = latest.resource_id AND grp.key = latest.key AND grp.last_seen = latest.max_ls
-		WHERE r.deleted = 0 AND r.kind = ? AND grp.key = ?
-	`
-	args := []any{kind, groupBy}
+	var query string
+	var args []any
 
-	// Optional filter
-	query, args = applyFilter(r, query, args)
-
-	query += ` GROUP BY grp.value ORDER BY cnt DESC`
+	if col, ok := resourceLevelFields[groupBy]; ok {
+		// Group by a resource-level field
+		query = `SELECT ` + col + ` as value, COUNT(*) as cnt FROM resources r WHERE r.deleted = 0`
+		if kind != "" && kind != "*" {
+			query += ` AND r.kind = ?`
+			args = append(args, kind)
+		}
+		query, args = applyFilter(r, query, args)
+		query += ` GROUP BY ` + col + ` ORDER BY cnt DESC`
+	} else {
+		// Group by a key-value key
+		query = `
+			SELECT grp.value, COUNT(DISTINCT grp.resource_id) as cnt
+			FROM resource_values grp
+			JOIN resources r ON r.id = grp.resource_id
+			INNER JOIN (
+				SELECT resource_id, key, MAX(last_seen) as max_ls
+				FROM resource_values GROUP BY resource_id, key
+			) latest ON grp.resource_id = latest.resource_id AND grp.key = latest.key AND grp.last_seen = latest.max_ls
+			WHERE r.deleted = 0 AND grp.key = ?
+		`
+		args = append(args, groupBy)
+		if kind != "" && kind != "*" {
+			query += ` AND r.kind = ?`
+			args = append(args, kind)
+		}
+		query, args = applyFilter(r, query, args)
+		query += ` GROUP BY grp.value ORDER BY cnt DESC`
+	}
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -107,13 +133,14 @@ func (s *Server) queryGroupBy(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/query/timeseries?kind=PostgresCluster&groupBy=spec.postgresVersion&start=2026-01-01&end=2026-03-24&interval=day
 // Returns time-series of counts grouped by value, using SCD date expansion.
+// kind is optional (omit or "*" for all). groupBy can be a resource field or key-value key.
 func (s *Server) queryTimeseries(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	groupBy := r.URL.Query().Get("groupBy")
 	start := r.URL.Query().Get("start")
 	end := r.URL.Query().Get("end")
-	if kind == "" || groupBy == "" {
-		http.Error(w, "kind and groupBy parameters required", http.StatusBadRequest)
+	if groupBy == "" {
+		http.Error(w, "groupBy parameter required", http.StatusBadRequest)
 		return
 	}
 
@@ -144,26 +171,56 @@ func (s *Server) queryTimeseries(w http.ResponseWriter, r *http.Request) {
 		dateStep = "+1 day"
 	}
 
-	query := `
-		WITH RECURSIVE dates(d) AS (
-			SELECT ` + start + `
-			UNION ALL
-			SELECT DATE(d, '` + dateStep + `') FROM dates WHERE d < ` + end + `
-		)
-		SELECT dates.d, rv.value, COUNT(DISTINCT rv.resource_id)
-		FROM dates
-		JOIN resource_values rv ON DATE(rv.first_seen) <= dates.d AND DATE(rv.last_seen) >= dates.d AND rv.key = ?
-		JOIN resources r ON r.id = rv.resource_id AND r.kind = ?
-	`
-	args := []any{groupBy, kind}
+	var query string
+	var args []any
 
-	// Optional filter
-	query, args = applyFilter(r, query, args)
-
-	query += `
-		GROUP BY dates.d, rv.value
-		ORDER BY dates.d, rv.value
-	`
+	if col, ok := resourceLevelFields[groupBy]; ok {
+		// Resource-level field: expand dates against resources table directly
+		query = `
+			WITH RECURSIVE dates(d) AS (
+				SELECT ` + start + `
+				UNION ALL
+				SELECT DATE(d, '` + dateStep + `') FROM dates WHERE d < ` + end + `
+			)
+			SELECT dates.d, ` + col + `, COUNT(*)
+			FROM dates
+			JOIN resources r ON DATE(r.first_seen) <= dates.d AND DATE(r.last_seen) >= dates.d
+			WHERE 1=1
+		`
+		if kind != "" && kind != "*" {
+			query += ` AND r.kind = ?`
+			args = append(args, kind)
+		}
+		query, args = applyFilter(r, query, args)
+		query += `
+			GROUP BY dates.d, ` + col + `
+			ORDER BY dates.d, ` + col + `
+		`
+	} else {
+		// Key-value key: existing behavior
+		query = `
+			WITH RECURSIVE dates(d) AS (
+				SELECT ` + start + `
+				UNION ALL
+				SELECT DATE(d, '` + dateStep + `') FROM dates WHERE d < ` + end + `
+			)
+			SELECT dates.d, rv.value, COUNT(DISTINCT rv.resource_id)
+			FROM dates
+			JOIN resource_values rv ON DATE(rv.first_seen) <= dates.d AND DATE(rv.last_seen) >= dates.d AND rv.key = ?
+			JOIN resources r ON r.id = rv.resource_id
+			WHERE 1=1
+		`
+		args = append(args, groupBy)
+		if kind != "" && kind != "*" {
+			query += ` AND r.kind = ?`
+			args = append(args, kind)
+		}
+		query, args = applyFilter(r, query, args)
+		query += `
+			GROUP BY dates.d, rv.value
+			ORDER BY dates.d, rv.value
+		`
+	}
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {

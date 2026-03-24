@@ -49,6 +49,19 @@ export interface TimeseriesPoint {
   values: Record<string, number>;
 }
 
+export interface WidgetConfig {
+  id: string;
+  type: "counter" | "bar" | "table" | "timeseries";
+  title: string;
+  query: {
+    kind?: string;
+    groupBy: string;
+  };
+  counterMode?: "total" | "distinct";
+  color?: string;
+  barColor?: string;
+}
+
 export interface KeyValueEntry {
   cluster: string;
   namespace: string;

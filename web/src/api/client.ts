@@ -80,7 +80,7 @@ export async function fetchKeys(kind?: string): Promise<string[]> {
 }
 
 export interface QueryParams {
-  kind: string;
+  kind?: string;
   groupBy: string;
   filterKey?: string;
   filterOp?: string;
@@ -92,7 +92,7 @@ export interface QueryParams {
 
 function buildQueryString(params: QueryParams): URLSearchParams {
   const q = new URLSearchParams();
-  q.set("kind", params.kind);
+  if (params.kind) q.set("kind", params.kind);
   q.set("groupBy", params.groupBy);
   if (params.filterKey) q.set("filterKey", params.filterKey);
   if (params.filterOp) q.set("filterOp", params.filterOp);

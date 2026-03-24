@@ -127,20 +127,23 @@ export function getSuggestions(
   const currentSeg = segments[currentSegIndex].trim();
 
   if (currentSegIndex === 0) {
-    // Typing kind
-    if (!currentSeg) return kinds;
-    return kinds.filter((k) =>
+    // Typing kind — include "*" for all resources
+    const allKinds = ["*", ...kinds];
+    if (!currentSeg) return allKinds;
+    return allKinds.filter((k) =>
       k.toLowerCase().includes(currentSeg.toLowerCase()),
     );
   }
 
   if (currentSegIndex === 1) {
     // Typing "group by <key>"
+    const resourceFields = ["kind", "cluster", "namespace", "name"];
+    const allKeys = [...resourceFields, ...keys.filter((k) => !resourceFields.includes(k))];
     const match = currentSeg.match(/^group\s+by\s+(.*)$/i);
     if (match) {
       const partial = match[1].trim();
-      if (!partial) return keys;
-      return keys.filter((k) =>
+      if (!partial) return allKeys;
+      return allKeys.filter((k) =>
         k.toLowerCase().includes(partial.toLowerCase()),
       );
     }

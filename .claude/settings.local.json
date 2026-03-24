@@ -18,7 +18,10 @@
       "Bash(curl -s \"localhost:8080/api/query/timeseries?kind=PostgresCluster&groupBy=spec.postgresVersion&start=2026-03-17&end=2026-03-24\")",
       "Bash(rm -f /tmp/trace.db)",
       "Bash(__NEW_LINE_2dd67e5cb0ba66d3__ echo:*)",
-      "Bash(curl -s \"http://localhost:8080/api/resources?asOf=2026-03-18\")"
+      "Bash(curl -s \"http://localhost:8080/api/resources?asOf=2026-03-18\")",
+      "Bash(curl -s \"http://localhost:8080/api/query?groupBy=kind\")",
+      "Bash(curl -s \"http://localhost:8080/api/query?groupBy=cluster\")",
+      "Bash(curl -s \"http://localhost:8080/api/query?kind=*&groupBy=kind\")"
     ]
   }
 }

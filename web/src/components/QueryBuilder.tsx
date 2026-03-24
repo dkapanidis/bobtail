@@ -31,6 +31,15 @@ const COLORS = [
   "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16",
 ];
 
+const tooltipStyle = {
+  contentStyle: {
+    backgroundColor: "var(--tooltip-bg, #1f2937)",
+    border: "1px solid var(--tooltip-border, #374151)",
+    borderRadius: "0.375rem",
+    color: "var(--tooltip-text, #e5e7eb)",
+  },
+};
+
 const FILTER_OPS = [
   { value: "eq", label: "=" },
   { value: "neq", label: "!=" },
