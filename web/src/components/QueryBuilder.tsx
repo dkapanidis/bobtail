@@ -517,10 +517,10 @@ export default function QueryBuilder() {
             {view === "bar" && (
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={groupByResults}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="value" />
-                  <YAxis />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="value" tick={{ fill: "#9ca3af" }} />
+                  <YAxis tick={{ fill: "#9ca3af" }} />
+                  <Tooltip cursor={{ fill: "rgba(55, 65, 81, 0.5)" }} {...tooltipStyle} />
                   <Bar dataKey="count" fill="#3b82f6" />
                 </BarChart>
               </ResponsiveContainer>
@@ -531,10 +531,10 @@ export default function QueryBuilder() {
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
                     <AreaChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="date" tick={{ fill: "#9ca3af" }} />
+                      <YAxis tick={{ fill: "#9ca3af" }} />
+                      <Tooltip {...tooltipStyle} />
                       <Legend />
                       {allValues.map((v, i) => (
                         <Area
