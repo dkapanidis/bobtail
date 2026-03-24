@@ -130,11 +130,8 @@ func syncValues(tx *sql.Tx, resourceID int64, current map[string]models.FlatValu
 					return err
 				}
 			} else {
-				// Changed — close old, insert new
+				// Changed — old row keeps its last_seen (marks last time it was observed with old value), insert new
 				stats.ValuesChanged++
-				if _, err := tx.Exec(`UPDATE resource_values SET last_seen = last_seen WHERE id = ?`, existing.id); err != nil {
-					return err
-				}
 				if err := insertValue(tx, resourceID, key, fv, runTime); err != nil {
 					return err
 				}

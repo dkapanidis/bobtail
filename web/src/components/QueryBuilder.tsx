@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   fetchFilterOptions,
   fetchKeys,
@@ -11,6 +11,7 @@ import type {
   GroupByResult,
   TimeseriesPoint,
 } from "../types";
+import { parseQuery, serializeQuery, getSuggestions } from "../lib/queryDsl";
 import FilterInput from "./FilterInput";
 import {
   BarChart,
@@ -57,9 +58,21 @@ export default function QueryBuilder() {
   const [interval, setInterval] = useState("day");
   const [view, setView] = useState<ViewMode>("bar");
 
+  // DSL bar state
+  const [dslInput, setDslInput] = useState("");
+  const [dslSuggestions, setDslSuggestions] = useState<string[]>([]);
+  const [dslHighlighted, setDslHighlighted] = useState(-1);
+  const [dslOpen, setDslOpen] = useState(false);
+  const dslRef = useRef<HTMLDivElement>(null);
+  const dslInputRef = useRef<HTMLInputElement>(null);
+  const [showForm, setShowForm] = useState(false);
+
   const [groupByResults, setGroupByResults] = useState<GroupByResult[]>([]);
   const [timeseriesResults, setTimeseriesResults] = useState<TimeseriesPoint[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Track whether the DSL bar or the form triggered the last update
+  const updatingFrom = useRef<"dsl" | "form" | null>(null);
 
   useEffect(() => {
     fetchFilterOptions().then(setOptions);
@@ -68,12 +81,159 @@ export default function QueryBuilder() {
   useEffect(() => {
     if (kind) {
       fetchKeys(kind).then(setKeys);
-      setGroupBy("");
-      setFilterKey("");
     } else {
       setKeys([]);
     }
   }, [kind]);
+
+  // Sync form → DSL
+  useEffect(() => {
+    if (updatingFrom.current === "dsl") {
+      updatingFrom.current = null;
+      return;
+    }
+    const q = serializeQuery({
+      kind,
+      groupBy,
+      filterKey,
+      filterOp,
+      filterValue,
+    });
+    setDslInput(q);
+  }, [kind, groupBy, filterKey, filterOp, filterValue]);
+
+  // Handle DSL input changes
+  function handleDslChange(value: string) {
+    setDslInput(value);
+    const parsed = parseQuery(value);
+
+    // Update suggestions
+    const cursorPos = dslInputRef.current?.selectionStart ?? value.length;
+    const suggs = getSuggestions(value, cursorPos, options.kinds, keys);
+    setDslSuggestions(suggs);
+    setDslHighlighted(-1);
+    setDslOpen(suggs.length > 0);
+
+    // If kind changed, fetch keys for the new kind
+    if (parsed.kind && parsed.kind !== kind) {
+      updatingFrom.current = "dsl";
+      setKind(parsed.kind);
+      fetchKeys(parsed.kind).then((newKeys) => {
+        setKeys(newKeys);
+      });
+    }
+
+    // Sync parsed fields to form
+    updatingFrom.current = "dsl";
+    if (parsed.kind !== kind) setKind(parsed.kind);
+    if (parsed.groupBy !== groupBy) setGroupBy(parsed.groupBy);
+    if (parsed.filterKey !== filterKey) setFilterKey(parsed.filterKey);
+    if (parsed.filterOp !== filterOp) setFilterOp(parsed.filterOp);
+    if (parsed.filterValue !== filterValue) setFilterValue(parsed.filterValue);
+  }
+
+  function applySuggestion(suggestion: string) {
+    const beforeCursor =
+      dslInput.slice(0, dslInputRef.current?.selectionStart ?? dslInput.length);
+    const segments = beforeCursor.split("|");
+    const segIndex = segments.length - 1;
+    const currentSeg = segments[segIndex];
+
+    // Replace the current segment's partial with the suggestion
+    let newSegContent: string;
+    if (segIndex === 0) {
+      newSegContent = suggestion;
+    } else if (segIndex === 1) {
+      newSegContent = " group by " + suggestion;
+    } else {
+      newSegContent = " " + suggestion;
+    }
+
+    segments[segIndex] = newSegContent;
+
+    // Check if we need a trailing pipe for the next segment
+    const afterCursor =
+      dslInput.slice(dslInputRef.current?.selectionStart ?? dslInput.length);
+    const newValue = segments.join("|") + afterCursor;
+    handleDslChange(newValue);
+    setDslOpen(false);
+
+    // Refocus
+    setTimeout(() => {
+      dslInputRef.current?.focus();
+      const pos = segments.join("|").length;
+      dslInputRef.current?.setSelectionRange(pos, pos);
+    }, 0);
+  }
+
+  function handleDslKeyDown(e: React.KeyboardEvent) {
+    if (!dslOpen || dslSuggestions.length === 0) {
+      if (e.key === "ArrowDown") {
+        setDslOpen(true);
+        e.preventDefault();
+      }
+      return;
+    }
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setDslHighlighted((h) =>
+          Math.min(h + 1, dslSuggestions.length - 1),
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setDslHighlighted((h) => Math.max(h - 1, -1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (
+          dslHighlighted >= 0 &&
+          dslHighlighted < dslSuggestions.length
+        ) {
+          applySuggestion(dslSuggestions[dslHighlighted]);
+        } else if (dslSuggestions.length === 1) {
+          applySuggestion(dslSuggestions[0]);
+        }
+        break;
+      case "Escape":
+        setDslOpen(false);
+        setDslHighlighted(-1);
+        break;
+      case "Tab":
+        if (
+          dslHighlighted >= 0 &&
+          dslHighlighted < dslSuggestions.length
+        ) {
+          e.preventDefault();
+          applySuggestion(dslSuggestions[dslHighlighted]);
+        } else if (dslSuggestions.length === 1) {
+          e.preventDefault();
+          applySuggestion(dslSuggestions[0]);
+        }
+        break;
+    }
+  }
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dslRef.current && !dslRef.current.contains(e.target as Node)) {
+        setDslOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  // Form field changes sync to DSL
+  function setFormField(
+    setter: (v: string) => void,
+    value: string,
+  ) {
+    updatingFrom.current = "form";
+    setter(value);
+  }
 
   const runQuery = useCallback(() => {
     if (!kind || !groupBy) return;
@@ -102,7 +262,7 @@ export default function QueryBuilder() {
     }
   }, [runQuery]);
 
-  // Build timeseries chart data: [{date, value1: count, value2: count, ...}]
+  // Build timeseries chart data
   const allValues = [
     ...new Set(timeseriesResults.flatMap((p) => Object.keys(p.values))),
   ].sort();
@@ -117,83 +277,151 @@ export default function QueryBuilder() {
 
   return (
     <div className="space-y-6">
-      {/* Query controls */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 space-y-4">
-        <h3 className="text-lg font-semibold">Query Builder</h3>
-
-        <div className="flex gap-3 flex-wrap items-end">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Kind</label>
-            <FilterInput
-              label="kind"
-              value={kind}
-              options={options.kinds}
-              onChange={setKind}
+      {/* DSL Query Bar */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="text-blue-500 font-mono text-lg">&gt;</span>
+          <div ref={dslRef} className="relative flex-1">
+            <input
+              ref={dslInputRef}
+              className="w-full border rounded px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              placeholder="PostgresCluster | group by spec.postgresVersion | spec.instances[0].replicas > 2"
+              value={dslInput}
+              onChange={(e) => handleDslChange(e.target.value)}
+              onFocus={() => {
+                const cursorPos =
+                  dslInputRef.current?.selectionStart ?? dslInput.length;
+                const suggs = getSuggestions(
+                  dslInput,
+                  cursorPos,
+                  options.kinds,
+                  keys,
+                );
+                setDslSuggestions(suggs);
+                setDslOpen(suggs.length > 0);
+              }}
+              onKeyDown={handleDslKeyDown}
             />
+            {dslOpen && dslSuggestions.length > 0 && (
+              <ul className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 border dark:border-gray-600 rounded shadow-lg max-h-48 overflow-y-auto text-sm font-mono">
+                {dslSuggestions.map((s, i) => (
+                  <li
+                    key={s}
+                    className={`px-3 py-1.5 cursor-pointer ${
+                      i === dslHighlighted
+                        ? "bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100"
+                        : "hover:bg-gray-100 dark:hover:bg-gray-600"
+                    }`}
+                    onClick={() => applySuggestion(s)}
+                    onMouseEnter={() => setDslHighlighted(i)}
+                  >
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Group By
-            </label>
-            <FilterInput
-              label="key"
-              value={groupBy}
-              options={keys}
-              onChange={setGroupBy}
-            />
-          </div>
+          <button
+            className="text-xs text-gray-400 hover:text-gray-600"
+            onClick={() => setShowForm(!showForm)}
+          >
+            {showForm ? "Hide form" : "Show form"}
+          </button>
+        </div>
+        <div className="text-xs text-gray-400 font-mono">
+          Syntax: &lt;kind&gt; | group by &lt;key&gt; | &lt;filterKey&gt;
+          &lt;op&gt; &lt;value&gt; &nbsp; Operators: = != &gt; &gt;= &lt;
+          &lt;= ~ (like)
         </div>
 
-        {/* Optional filter */}
-        <div className="flex gap-3 flex-wrap items-end">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Filter Key (optional)
-            </label>
-            <FilterInput
-              label="filter key"
-              value={filterKey}
-              options={keys}
-              onChange={setFilterKey}
-            />
+        {/* Collapsible form fields */}
+        {showForm && (
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-3">
+            <div className="flex gap-3 flex-wrap items-end">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Kind
+                </label>
+                <FilterInput
+                  label="kind"
+                  value={kind}
+                  options={options.kinds}
+                  onChange={(v) => setFormField(setKind, v)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Group By
+                </label>
+                <FilterInput
+                  label="key"
+                  value={groupBy}
+                  options={keys}
+                  onChange={(v) => setFormField(setGroupBy, v)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 flex-wrap items-end">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Filter Key
+                </label>
+                <FilterInput
+                  label="filter key"
+                  value={filterKey}
+                  options={keys}
+                  onChange={(v) => setFormField(setFilterKey, v)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Op
+                </label>
+                <select
+                  className="border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
+                  value={filterOp}
+                  onChange={(e) => setFormField(setFilterOp, e.target.value)}
+                >
+                  {FILTER_OPS.map((op) => (
+                    <option key={op.value} value={op.value}>
+                      {op.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Value
+                </label>
+                <input
+                  className="border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600 w-44"
+                  placeholder="Filter value..."
+                  value={filterValue}
+                  onChange={(e) =>
+                    setFormField(setFilterValue, e.target.value)
+                  }
+                />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Op</label>
-            <select
-              className="border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
-              value={filterOp}
-              onChange={(e) => setFilterOp(e.target.value)}
+        )}
+
+        {/* Interval is always visible */}
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-gray-500">Interval:</label>
+          {(["day", "week", "month"] as const).map((i) => (
+            <button
+              key={i}
+              className={`px-2 py-1 rounded text-xs ${
+                interval === i
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200"
+              }`}
+              onClick={() => setInterval(i)}
             >
-              {FILTER_OPS.map((op) => (
-                <option key={op.value} value={op.value}>
-                  {op.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Value</label>
-            <input
-              className="border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600 w-44"
-              placeholder="Filter value..."
-              value={filterValue}
-              onChange={(e) => setFilterValue(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Interval
-            </label>
-            <select
-              className="border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
-              value={interval}
-              onChange={(e) => setInterval(e.target.value)}
-            >
-              <option value="day">Daily</option>
-              <option value="week">Weekly</option>
-              <option value="month">Monthly</option>
-            </select>
-          </div>
+              {i === "day" ? "Daily" : i === "week" ? "Weekly" : "Monthly"}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -211,11 +439,17 @@ export default function QueryBuilder() {
                 }`}
                 onClick={() => setView(m)}
               >
-                {m === "bar" ? "Bar Chart" : m === "table" ? "Table" : "Timeline"}
+                {m === "bar"
+                  ? "Bar Chart"
+                  : m === "table"
+                    ? "Table"
+                    : "Timeline"}
               </button>
             ))}
             {loading && (
-              <span className="text-sm text-gray-400 ml-auto">Loading...</span>
+              <span className="text-sm text-gray-400 ml-auto">
+                Loading...
+              </span>
             )}
           </div>
 
