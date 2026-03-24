@@ -37,5 +37,12 @@ func migrate(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_rv_key_value_time ON resource_values(key, value_time);
 		CREATE INDEX IF NOT EXISTS idx_rv_lookup ON resource_values(resource_id, key, last_seen);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Add deleted column if not exists (migration for existing databases)
+	_, _ = db.Exec(`ALTER TABLE resources ADD COLUMN deleted BOOLEAN NOT NULL DEFAULT 0`)
+
+	return nil
 }

@@ -31,7 +31,7 @@ type valueResponse struct {
 }
 
 func (s *Server) listResources(w http.ResponseWriter, r *http.Request) {
-	query := `SELECT id, cluster, namespace, kind, name, first_seen, last_seen FROM resources WHERE 1=1`
+	query := `SELECT id, cluster, namespace, kind, name, first_seen, last_seen FROM resources WHERE deleted = 0`
 	var args []any
 
 	if v := r.URL.Query().Get("cluster"); v != "" {

@@ -165,9 +165,24 @@ func insertValue(tx *sql.Tx, resourceID int64, key string, fv models.FlatValue, 
 }
 
 func closeDeletedResources(tx *sql.Tx, runTime time.Time) (int, error) {
-	var count int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM resources WHERE last_seen < ?`, runTime).Scan(&count); err != nil {
+	// Mark resources not seen in this run as deleted
+	result, err := tx.Exec(
+		`UPDATE resources SET deleted = 1 WHERE last_seen < ? AND deleted = 0`,
+		runTime,
+	)
+	if err != nil {
 		return 0, err
 	}
-	return count, nil
+	count, _ := result.RowsAffected()
+
+	// Un-delete resources that reappeared (last_seen was updated to runTime)
+	_, err = tx.Exec(
+		`UPDATE resources SET deleted = 0 WHERE last_seen = ? AND deleted = 1`,
+		runTime,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(count), nil
 }

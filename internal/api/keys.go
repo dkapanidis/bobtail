@@ -31,7 +31,7 @@ func (s *Server) listKeyValues(w http.ResponseWriter, r *http.Request) {
 			FROM resource_values
 			GROUP BY resource_id, key
 		) latest ON rv.resource_id = latest.resource_id AND rv.key = latest.key AND rv.last_seen = latest.max_ls
-		WHERE 1=1
+		WHERE r.deleted = 0
 	`
 	var args []any
 

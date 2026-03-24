@@ -75,7 +75,7 @@ func (s *Server) queryGroupBy(w http.ResponseWriter, r *http.Request) {
 			SELECT resource_id, key, MAX(last_seen) as max_ls
 			FROM resource_values GROUP BY resource_id, key
 		) latest ON grp.resource_id = latest.resource_id AND grp.key = latest.key AND grp.last_seen = latest.max_ls
-		WHERE r.kind = ? AND grp.key = ?
+		WHERE r.deleted = 0 AND r.kind = ? AND grp.key = ?
 	`
 	args := []any{kind, groupBy}
 

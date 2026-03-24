@@ -21,7 +21,7 @@ func (s *Server) getFilterOptions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryDistinct := func(column string) ([]string, error) {
-		rows, err := s.db.Query("SELECT DISTINCT " + column + " FROM resources ORDER BY " + column)
+		rows, err := s.db.Query("SELECT DISTINCT " + column + " FROM resources WHERE deleted = 0 ORDER BY " + column)
 		if err != nil {
 			return nil, err
 		}
