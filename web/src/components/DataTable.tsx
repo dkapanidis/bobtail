@@ -145,6 +145,20 @@ export default function DataTable<T>({
     const maxCol = columns.length - 1;
 
     function handleKeyDown(e: KeyboardEvent) {
+      // Don't capture keys when focus is inside a dialog, modal, or input element
+      const target = e.target as HTMLElement;
+      if (
+        target.closest("dialog") ||
+        target.closest("[role='dialog']") ||
+        target.closest("[role='alertdialog']") ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
       if (
         ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
       ) {
@@ -306,10 +320,12 @@ export default function DataTable<T>({
                       handleCellMouseEnter(rowIdx, colIdx)
                     }
                   >
-                    <span className="relative z-[1] flex items-center gap-1.5">
-                      {col.render
-                        ? col.render(row, rowIdx)
-                        : col.getValue(row)}
+                    <span className="relative z-[1] flex items-center gap-1.5 w-full">
+                      <span className="flex-1 min-w-0">
+                        {col.render
+                          ? col.render(row, rowIdx)
+                          : col.getValue(row)}
+                      </span>
                       <CopyButton text={col.getValue(row)} />
                     </span>
                   </td>

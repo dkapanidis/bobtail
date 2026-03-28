@@ -570,7 +570,7 @@ export default function QueryBuilder() {
 }
 
 function QueryTable({ groupBy, data }: { groupBy: string; data: GroupByResult[] }) {
-  const maxCount = data[0]?.count || 1;
+  const maxCount = Math.max(1, ...data.map((r) => r.count));
   const columns: ColumnDef<GroupByResult>[] = useMemo(
     () => [
       {
