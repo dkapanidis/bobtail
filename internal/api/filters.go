@@ -22,11 +22,19 @@ func (s *Server) getFilterOptions(w http.ResponseWriter, r *http.Request) {
 
 	allowedColumns := map[string]bool{"cluster": true, "namespace": true, "kind": true, "name": true}
 
-	queryDistinct := func(column string) ([]string, error) {
-		if !allowedColumns[column] {
+	type Column string
+	const (
+		Cluster   Column = "cluster"
+		Namespace Column = "namespace"
+		Kind      Column = "kind"
+		Name      Column = "name"
+	)
+
+	queryDistinct := func(column Column) ([]string, error) {
+		if !allowedColumns[string(column)] {
 			return nil, nil
 		}
-		rows, err := s.db.Query("SELECT DISTINCT " + column + " FROM resources WHERE deleted = 0 ORDER BY " + column)
+		rows, err := s.db.Query("SELECT DISTINCT " + string(column) + " FROM resources WHERE deleted = 0 ORDER BY " + string(column))
 		if err != nil {
 			return nil, err
 		}
@@ -46,19 +54,19 @@ func (s *Server) getFilterOptions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var err error
-	if resp.Clusters, err = queryDistinct("cluster"); err != nil {
+	if resp.Clusters, err = queryDistinct(Cluster); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if resp.Namespaces, err = queryDistinct("namespace"); err != nil {
+	if resp.Namespaces, err = queryDistinct(Namespace); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if resp.Kinds, err = queryDistinct("kind"); err != nil {
+	if resp.Kinds, err = queryDistinct(Kind); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if resp.Names, err = queryDistinct("name"); err != nil {
+	if resp.Names, err = queryDistinct(Name); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
