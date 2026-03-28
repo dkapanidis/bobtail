@@ -321,7 +321,7 @@ export default function DataTable<T>({
                 {columns.map((col, colIdx) => (
                   <td
                     key={col.key}
-                    className={`px-4 py-2 group/cell cursor-cell cell-selectable ${col.className || ""} ${isCellSelected(rowIdx, colIdx) ? "cell-selected" : ""}`}
+                    className={`px-4 py-2 whitespace-nowrap group/cell cursor-cell cell-selectable ${col.className || ""} ${isCellSelected(rowIdx, colIdx) ? "cell-selected" : ""}`}
                     onMouseDown={(e) =>
                       handleCellMouseDown(rowIdx, colIdx, e)
                     }
