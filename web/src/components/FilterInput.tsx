@@ -282,43 +282,60 @@ export default FilterInput;
 function fuzzyMatch(text: string, query: string): boolean {
   if (!query) return true;
   const t = text.toLowerCase();
-  const q = query.toLowerCase();
-  let ti = 0;
-  for (let qi = 0; qi < q.length; qi++) {
-    ti = t.indexOf(q[qi], ti);
-    if (ti === -1) return false;
-    ti++;
-  }
-  return true;
+  // Split by spaces — each word must fuzzy-match independently
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return words.every((word) => {
+    let ti = 0;
+    for (let qi = 0; qi < word.length; qi++) {
+      ti = t.indexOf(word[qi], ti);
+      if (ti === -1) return false;
+      ti++;
+    }
+    return true;
+  });
 }
 
-// Lower score = better match. Prefers consecutive and early matches.
+// Lower score = better match. Prefers substring matches, then consecutive chars, then early matches.
 function fuzzyScore(text: string, query: string): number {
   if (!query) return 0;
   const t = text.toLowerCase();
-  const q = query.toLowerCase();
-  let ti = 0;
-  let score = 0;
-  for (let qi = 0; qi < q.length; qi++) {
-    const idx = t.indexOf(q[qi], ti);
-    if (idx === -1) return Infinity;
-    score += idx - ti; // penalize gaps
-    ti = idx + 1;
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  let total = 0;
+  for (const word of words) {
+    if (t.includes(word)) {
+      total += -1000 + t.indexOf(word);
+    } else {
+      let ti = 0;
+      for (let qi = 0; qi < word.length; qi++) {
+        const idx = t.indexOf(word[qi], ti);
+        if (idx === -1) return Infinity;
+        total += idx - ti;
+        ti = idx + 1;
+      }
+    }
   }
-  return score;
+  return total;
 }
 
 function fuzzyHighlightIndices(text: string, query: string): number[] {
   if (!query) return [];
   const t = text.toLowerCase();
-  const q = query.toLowerCase();
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const indices: number[] = [];
-  let ti = 0;
-  for (let qi = 0; qi < q.length; qi++) {
-    const idx = t.indexOf(q[qi], ti);
-    if (idx === -1) return indices;
-    indices.push(idx);
-    ti = idx + 1;
+  for (const word of words) {
+    // Prefer substring match for highlighting
+    const subIdx = t.indexOf(word);
+    if (subIdx !== -1) {
+      for (let i = subIdx; i < subIdx + word.length; i++) indices.push(i);
+    } else {
+      let ti = 0;
+      for (let qi = 0; qi < word.length; qi++) {
+        const idx = t.indexOf(word[qi], ti);
+        if (idx === -1) break;
+        indices.push(idx);
+        ti = idx + 1;
+      }
+    }
   }
   return indices;
 }
