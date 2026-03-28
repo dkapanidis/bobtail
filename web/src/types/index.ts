@@ -49,6 +49,13 @@ export interface TimeseriesPoint {
   values: Record<string, number>;
 }
 
+export interface WidgetLayout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface WidgetConfig {
   id: string;
   type: "counter" | "bar" | "table" | "timeseries";
@@ -60,6 +67,7 @@ export interface WidgetConfig {
   counterMode?: "total" | "distinct";
   color?: string;
   barColor?: string;
+  layout?: WidgetLayout;
 }
 
 export interface KeyValueEntry {

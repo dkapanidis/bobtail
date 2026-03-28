@@ -38,6 +38,10 @@ td.cell-selected::after {
   }
 }
 
+.react-grid-item.react-grid-placeholder {
+  background: #374151 !important;
+}
+
 .recharts-wrapper *:focus,
 .recharts-wrapper *:focus-visible {
   outline: none !important;

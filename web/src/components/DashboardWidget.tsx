@@ -77,7 +77,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 animate-pulse">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 animate-pulse h-full">
         <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4" />
         <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded" />
       </div>
@@ -90,7 +90,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
         ? data.length
         : data.reduce((sum, r) => sum + r.count, 0);
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 h-full">
         <div className={`text-3xl font-bold ${config.color || "text-blue-600"}`}>
           {value}
         </div>
@@ -101,9 +101,9 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
 
   if (config.type === "bar") {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 h-full flex flex-col">
         <h3 className="text-lg font-semibold mb-4">{config.title}</h3>
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
             <XAxis dataKey="value" tick={{ fill: "#9ca3af" }} />
@@ -118,7 +118,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
 
   if (config.type === "table") {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 h-full">
         <h3 className="text-lg font-semibold mb-4">{config.title}</h3>
         <DashboardTable groupBy={config.query.groupBy} data={data} />
       </div>
@@ -136,7 +136,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
     });
 
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 h-full flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{config.title}</h3>
           <div className="flex items-center gap-1">
@@ -156,7 +156,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
           </div>
         </div>
         {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="date" tick={{ fill: "#9ca3af" }} />

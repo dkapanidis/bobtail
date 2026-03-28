@@ -1,9 +1,23 @@
 import { useState, useCallback } from "react";
+import { Responsive, useContainerWidth } from "react-grid-layout";
+import type { Layout } from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import type { WidgetConfig } from "../types";
 import DashboardWidget from "./DashboardWidget";
 import WidgetEditor from "./WidgetEditor";
 
 const STORAGE_KEY = "dashboard-widgets";
+
+function defaultLayout(widget: WidgetConfig, index: number): Layout {
+  if (widget.layout) {
+    return { i: widget.id, ...widget.layout };
+  }
+  if (widget.type === "counter") {
+    return { i: widget.id, x: (index * 4) % 12, y: 0, w: 4, h: 2 };
+  }
+  return { i: widget.id, x: (index * 6) % 12, y: 10, w: 6, h: 5 };
+}
 
 const DEFAULT_WIDGETS: WidgetConfig[] = [
   {
@@ -13,6 +27,7 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
     query: { kind: "*", groupBy: "kind" },
     counterMode: "total",
     color: "text-blue-600",
+    layout: { x: 0, y: 0, w: 4, h: 2 },
   },
   {
     id: "resource-kinds",
@@ -21,6 +36,7 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
     query: { kind: "*", groupBy: "kind" },
     counterMode: "distinct",
     color: "text-green-600",
+    layout: { x: 4, y: 0, w: 4, h: 2 },
   },
   {
     id: "clusters",
@@ -29,6 +45,7 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
     query: { kind: "*", groupBy: "cluster" },
     counterMode: "distinct",
     color: "text-purple-600",
+    layout: { x: 8, y: 0, w: 4, h: 2 },
   },
   {
     id: "by-kind",
@@ -36,6 +53,7 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
     title: "By Kind",
     query: { kind: "*", groupBy: "kind" },
     barColor: "#3b82f6",
+    layout: { x: 0, y: 2, w: 6, h: 5 },
   },
   {
     id: "by-cluster",
@@ -43,6 +61,7 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
     title: "By Cluster",
     query: { kind: "*", groupBy: "cluster" },
     barColor: "#8b5cf6",
+    layout: { x: 6, y: 2, w: 6, h: 5 },
   },
 ];
 
@@ -73,21 +92,25 @@ export default function Dashboard() {
     persist(widgets.filter((w) => w.id !== id));
   }
 
-  function handleMove(id: string, direction: -1 | 1) {
-    const idx = widgets.findIndex((w) => w.id === id);
-    if (idx < 0) return;
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= widgets.length) return;
-    const copy = [...widgets];
-    [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
-    persist(copy);
-  }
-
   function handleSave(widget: WidgetConfig) {
     if (editorTarget) {
-      persist(widgets.map((w) => (w.id === editorTarget.id ? widget : w)));
+      persist(widgets.map((w) => (w.id === editorTarget.id ? { ...widget, layout: w.layout } : w)));
     } else {
-      persist([...widgets, widget]);
+      // New widget — place at bottom
+      const maxY = widgets.reduce((max, w) => {
+        const ly = (w.layout?.y ?? 0) + (w.layout?.h ?? 2);
+        return Math.max(max, ly);
+      }, 0);
+      const newWidget = {
+        ...widget,
+        layout: {
+          x: 0,
+          y: maxY,
+          w: widget.type === "counter" ? 4 : 6,
+          h: widget.type === "counter" ? 2 : 5,
+        },
+      };
+      persist([...widgets, newWidget]);
     }
     setShowEditor(false);
     setEditorTarget(null);
@@ -97,11 +120,28 @@ export default function Dashboard() {
     persist(DEFAULT_WIDGETS);
   }
 
-  const counters = widgets.filter((w) => w.type === "counter");
-  const charts = widgets.filter((w) => w.type !== "counter");
+  function handleLayoutChange(layout: Layout[]) {
+    const updated = widgets.map((w) => {
+      const l = layout.find((item) => item.i === w.id);
+      if (l) {
+        return { ...w, layout: { x: l.x, y: l.y, w: l.w, h: l.h } };
+      }
+      return w;
+    });
+    persist(updated);
+  }
+
+  const layouts = {
+    lg: widgets.map((w, i) => ({
+      ...defaultLayout(w, i),
+      static: !editing,
+    })),
+  };
+
+  const { containerRef, width: containerWidth } = useContainerWidth();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4" ref={containerRef}>
       {/* Toolbar */}
       <div className="flex items-center justify-end gap-3">
         {editing && (
@@ -135,43 +175,33 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Counters */}
-      {counters.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {counters.map((w) => (
+      {/* Grid */}
+      <Responsive
+        className="layout"
+        layouts={layouts}
+        breakpoints={{ lg: 0 }}
+        cols={{ lg: 12 }}
+        rowHeight={50}
+        width={containerWidth}
+        isDraggable={editing}
+        isResizable={editing}
+        onLayoutChange={handleLayoutChange}
+        draggableHandle=".widget-drag-handle"
+        compactType="vertical"
+      >
+        {widgets.map((w) => (
+          <div key={w.id}>
             <WidgetWrapper
-              key={w.id}
               widget={w}
               editing={editing}
               onEdit={() => { setEditorTarget(w); setShowEditor(true); }}
               onDelete={() => handleDelete(w.id)}
-              onMoveUp={() => handleMove(w.id, -1)}
-              onMoveDown={() => handleMove(w.id, 1)}
             >
               <DashboardWidget config={w} />
             </WidgetWrapper>
-          ))}
-        </div>
-      )}
-
-      {/* Charts */}
-      {charts.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {charts.map((w) => (
-            <WidgetWrapper
-              key={w.id}
-              widget={w}
-              editing={editing}
-              onEdit={() => { setEditorTarget(w); setShowEditor(true); }}
-              onDelete={() => handleDelete(w.id)}
-              onMoveUp={() => handleMove(w.id, -1)}
-              onMoveDown={() => handleMove(w.id, 1)}
-            >
-              <DashboardWidget config={w} />
-            </WidgetWrapper>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </Responsive>
 
       {widgets.length === 0 && (
         <div className="text-center py-16 text-gray-400">
@@ -196,55 +226,41 @@ function WidgetWrapper({
   editing,
   onEdit,
   onDelete,
-  onMoveUp,
-  onMoveDown,
   children,
 }: {
   widget: WidgetConfig;
   editing: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
   children: React.ReactNode;
 }) {
-  if (!editing) return <>{children}</>;
-
   return (
-    <div className="relative group">
-      <div className="absolute -top-2 -right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          className="w-7 h-7 flex items-center justify-center rounded bg-gray-700 text-gray-300 hover:bg-gray-600 text-xs shadow"
-          onClick={onMoveUp}
-          title="Move left"
-        >
-          ←
-        </button>
-        <button
-          className="w-7 h-7 flex items-center justify-center rounded bg-gray-700 text-gray-300 hover:bg-gray-600 text-xs shadow"
-          onClick={onMoveDown}
-          title="Move right"
-        >
-          →
-        </button>
-        <button
-          className="w-7 h-7 flex items-center justify-center rounded bg-blue-600 text-white hover:bg-blue-700 text-xs shadow"
-          onClick={onEdit}
-          title="Edit"
-        >
-          E
-        </button>
-        <button
-          className="w-7 h-7 flex items-center justify-center rounded bg-red-600 text-white hover:bg-red-700 text-xs shadow"
-          onClick={onDelete}
-          title="Delete"
-        >
-          X
-        </button>
-      </div>
-      <div className="ring-1 ring-dashed ring-blue-500/50 rounded-lg">
-        {children}
-      </div>
+    <div className={`h-full ${editing ? "relative group" : ""}`}>
+      {editing && (
+        <>
+          <div className="widget-drag-handle absolute inset-0 z-[5] cursor-grab active:cursor-grabbing" />
+          <div className="absolute -top-2 -right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              className="w-7 h-7 flex items-center justify-center rounded bg-blue-600 text-white hover:bg-blue-700 text-xs shadow"
+              onClick={onEdit}
+              title="Edit"
+            >
+              E
+            </button>
+            <button
+              className="w-7 h-7 flex items-center justify-center rounded bg-red-600 text-white hover:bg-red-700 text-xs shadow"
+              onClick={onDelete}
+              title="Delete"
+            >
+              X
+            </button>
+          </div>
+          <div className="ring-1 ring-dashed ring-blue-500/50 rounded-lg h-full overflow-hidden">
+            {children}
+          </div>
+        </>
+      )}
+      {!editing && <div className="h-full">{children}</div>}
     </div>
   );
 }
