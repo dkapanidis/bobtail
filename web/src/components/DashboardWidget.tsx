@@ -1,6 +1,26 @@
 import { useEffect, useState } from "react";
 import { fetchGroupBy, fetchTimeseries } from "../api/client";
 import type { WidgetConfig, GroupByResult, TimeseriesPoint } from "../types";
+
+function formatDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function fillMissingDates(
+  data: TimeseriesPoint[],
+  start: string,
+  end: string,
+): TimeseriesPoint[] {
+  const allDates: string[] = [];
+  const current = new Date(start + "T00:00:00");
+  const endDate = new Date(end + "T00:00:00");
+  while (current <= endDate) {
+    allDates.push(formatDate(current));
+    current.setDate(current.getDate() + 1);
+  }
+  const dataMap = new Map(data.map((p) => [p.date, p]));
+  return allDates.map((d) => dataMap.get(d) || { date: d, values: {} });
+}
 import {
   BarChart,
   Bar,
@@ -37,8 +57,13 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
     const params = { kind: config.query.kind, groupBy: config.query.groupBy };
 
     if (config.type === "timeseries") {
-      fetchTimeseries(params)
-        .then(setTsData)
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() - 7);
+      const startStr = formatDate(start);
+      const endStr = formatDate(now);
+      fetchTimeseries({ ...params, start: startStr, end: endStr })
+        .then((ts) => setTsData(fillMissingDates(ts, startStr, endStr)))
         .finally(() => setLoading(false));
     } else {
       fetchGroupBy(params)

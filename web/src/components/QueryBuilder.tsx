@@ -40,6 +40,29 @@ const tooltipStyle = {
   },
 };
 
+function formatDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function fillMissingDates(
+  data: TimeseriesPoint[],
+  start: string,
+  end: string,
+  interval: string,
+): TimeseriesPoint[] {
+  const allDates: string[] = [];
+  const current = new Date(start + "T00:00:00");
+  const endDate = new Date(end + "T00:00:00");
+  while (current <= endDate) {
+    allDates.push(formatDate(current));
+    if (interval === "week") current.setDate(current.getDate() + 7);
+    else if (interval === "month") current.setMonth(current.getMonth() + 1);
+    else current.setDate(current.getDate() + 1);
+  }
+  const dataMap = new Map(data.map((p) => [p.date, p]));
+  return allDates.map((d) => dataMap.get(d) || { date: d, values: {} });
+}
+
 const FILTER_OPS = [
   { value: "eq", label: "=" },
   { value: "neq", label: "!=" },
@@ -256,11 +279,19 @@ export default function QueryBuilder() {
     }
     params.interval = interval;
 
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(start.getDate() - 7);
+    const startStr = formatDate(start);
+    const endStr = formatDate(now);
+    params.start = startStr;
+    params.end = endStr;
+
     setLoading(true);
     Promise.all([fetchGroupBy(params), fetchTimeseries(params)])
       .then(([gb, ts]) => {
         setGroupByResults(gb);
-        setTimeseriesResults(ts);
+        setTimeseriesResults(fillMissingDates(ts, startStr, endStr, interval));
       })
       .finally(() => setLoading(false));
   }, [kind, groupBy, filterKey, filterOp, filterValue, interval]);

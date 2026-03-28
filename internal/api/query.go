@@ -144,9 +144,9 @@ func (s *Server) queryTimeseries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default date range: last 90 days
+	// Default date range: last 7 days
 	if start == "" {
-		start = "date('now', '-90 days')"
+		start = "date('now', '-7 days')"
 	} else {
 		start = "date('" + sanitizeDateParam(start) + "')"
 	}
