@@ -9,14 +9,20 @@ import WidgetEditor from "./WidgetEditor";
 
 const STORAGE_KEY = "dashboard-widgets";
 
+function minSize(type: WidgetConfig["type"]): { minW: number; minH: number } {
+  if (type === "counter") return { minW: 2, minH: 2 };
+  return { minW: 3, minH: 3 };
+}
+
 function defaultLayout(widget: WidgetConfig, index: number): Layout {
+  const mins = minSize(widget.type);
   if (widget.layout) {
-    return { i: widget.id, ...widget.layout };
+    return { i: widget.id, ...widget.layout, ...mins };
   }
   if (widget.type === "counter") {
-    return { i: widget.id, x: (index * 4) % 12, y: 0, w: 4, h: 2 };
+    return { i: widget.id, x: (index * 4) % 12, y: 0, w: 4, h: 2, ...mins };
   }
-  return { i: widget.id, x: (index * 6) % 12, y: 10, w: 6, h: 5 };
+  return { i: widget.id, x: (index * 6) % 12, y: 10, w: 6, h: 5, ...mins };
 }
 
 const DEFAULT_WIDGETS: WidgetConfig[] = [
@@ -238,7 +244,10 @@ function WidgetWrapper({
     <div className={`h-full ${editing ? "relative group" : ""}`}>
       {editing && (
         <>
-          <div className="widget-drag-handle absolute inset-0 z-[5] cursor-grab active:cursor-grabbing" />
+          <div
+            className="widget-drag-handle absolute inset-0 z-[5] cursor-grab active:cursor-grabbing"
+            style={{ clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)" }}
+          />
           <div className="absolute -top-2 -right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               className="w-7 h-7 flex items-center justify-center rounded bg-blue-600 text-white hover:bg-blue-700 text-xs shadow"
@@ -258,6 +267,19 @@ function WidgetWrapper({
           <div className="ring-1 ring-dashed ring-blue-500/50 rounded-lg h-full overflow-hidden">
             {children}
           </div>
+          {/* Resize grip */}
+          <svg
+            className="absolute bottom-1 right-1 w-3 h-3 text-gray-400 pointer-events-none"
+            viewBox="0 0 6 6"
+            fill="currentColor"
+          >
+            <circle cx="5" cy="1" r="0.7" />
+            <circle cx="3" cy="3" r="0.7" />
+            <circle cx="5" cy="3" r="0.7" />
+            <circle cx="1" cy="5" r="0.7" />
+            <circle cx="3" cy="5" r="0.7" />
+            <circle cx="5" cy="5" r="0.7" />
+          </svg>
         </>
       )}
       {!editing && <div className="h-full">{children}</div>}
