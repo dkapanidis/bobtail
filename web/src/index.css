@@ -7,6 +7,37 @@
 
 .filter-dropdown-input:focus,
 .filter-dropdown-input:focus-visible,
+/* Additive cell selection + hover highlighting */
+td.cell-selectable {
+  position: relative;
+}
+td.cell-selectable::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: transparent;
+  transition: background 0.1s;
+}
+tr:hover > td.cell-selectable::before {
+  background: rgba(128, 128, 128, 0.08);
+}
+td.cell-selected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(128, 128, 128, 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  tr:hover > td.cell-selectable::before {
+    background: rgba(200, 200, 200, 0.08);
+  }
+  td.cell-selected::after {
+    background: rgba(200, 200, 200, 0.15);
+  }
+}
+
 .recharts-wrapper *:focus,
 .recharts-wrapper *:focus-visible {
   outline: none !important;

@@ -8,6 +8,22 @@ import DatePicker from "./DatePicker";
 type SortKey = "name" | "cluster" | "namespace" | "kind" | "firstSeen" | "lastSeen";
 type SortDir = "asc" | "desc" | null;
 
+const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "cluster", label: "Cluster" },
+  { key: "namespace", label: "Namespace" },
+  { key: "kind", label: "Kind" },
+  { key: "firstSeen", label: "First Seen" },
+  { key: "lastSeen", label: "Last Seen" },
+];
+
+function getCellValue(r: Resource, col: SortKey): string {
+  if (col === "firstSeen" || col === "lastSeen") {
+    return new Date(r[col]).toLocaleDateString();
+  }
+  return r[col];
+}
+
 interface Props {
   onSelect: (id: number) => void;
 }
@@ -30,6 +46,16 @@ export default function ResourceTable({ onSelect }: Props) {
   });
   const [sortKey, setSortKey] = useState<SortKey | null>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  // Cell selection state (rectangular)
+  const [selection, setSelection] = useState<{
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
+  } | null>(null);
+  const dragging = useRef(false);
+  const tableRef = useRef<HTMLTableElement>(null);
 
   const refs = {
     cluster: useRef<FilterInputHandle>(null),
@@ -74,6 +100,89 @@ export default function ResourceTable({ onSelect }: Props) {
     });
   }, [resources, sortKey, sortDir]);
 
+  // Cell selection handlers
+  const handleCellMouseDown = useCallback(
+    (row: number, col: number, e: React.MouseEvent) => {
+      // Don't start selection on links/buttons/copy icons
+      const target = e.target as HTMLElement;
+      if (target.closest("button") || target.closest("a")) return;
+
+      e.preventDefault();
+      dragging.current = true;
+      setSelection({ startRow: row, endRow: row, startCol: col, endCol: col });
+    },
+    [],
+  );
+
+  const handleCellMouseEnter = useCallback(
+    (row: number, col: number) => {
+      if (!dragging.current) return;
+      setSelection((s) => (s ? { ...s, endRow: row, endCol: col } : null));
+    },
+    [],
+  );
+
+  useEffect(() => {
+    function handleMouseUp() {
+      dragging.current = false;
+    }
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => document.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  // Clear selection on click outside table
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
+        setSelection(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Cmd/Ctrl+C to copy selection
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!selection) return;
+      if (e.key === "Escape") {
+        setSelection(null);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "c") {
+        const minRow = Math.min(selection.startRow, selection.endRow);
+        const maxRow = Math.max(selection.startRow, selection.endRow);
+        const minCol = Math.min(selection.startCol, selection.endCol);
+        const maxCol = Math.max(selection.startCol, selection.endCol);
+        const lines = sortedResources
+          .slice(minRow, maxRow + 1)
+          .map((r) =>
+            COLUMNS.slice(minCol, maxCol + 1)
+              .map((c) => getCellValue(r, c.key))
+              .join("\t"),
+          );
+        navigator.clipboard.writeText(lines.join("\n"));
+        e.preventDefault();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [selection, sortedResources]);
+
+  function isCellSelected(row: number, col: number): boolean {
+    if (!selection) return false;
+    const minRow = Math.min(selection.startRow, selection.endRow);
+    const maxRow = Math.max(selection.startRow, selection.endRow);
+    const minCol = Math.min(selection.startCol, selection.endCol);
+    const maxCol = Math.max(selection.startCol, selection.endCol);
+    return row >= minRow && row <= maxRow && col >= minCol && col <= maxCol;
+  }
+
+  const selectionCount = selection
+    ? (Math.abs(selection.endRow - selection.startRow) + 1) *
+      (Math.abs(selection.endCol - selection.startCol) + 1)
+    : 0;
+
   const hasFilters = filters.cluster || filters.namespace || filters.kind || filters.name;
 
   return (
@@ -92,7 +201,7 @@ export default function ResourceTable({ onSelect }: Props) {
         )}
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
+        <table ref={tableRef} className="w-full text-sm text-left select-none">
           <thead className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
             <tr>
               <ThFilter label="Name" value={filters.name} sortDir={sortKey === "name" ? sortDir : null} onSort={() => cycleSort("name")} onFilter={() => refs.name.current?.toggle()}>
@@ -112,13 +221,17 @@ export default function ResourceTable({ onSelect }: Props) {
             </tr>
           </thead>
           <tbody>
-            {sortedResources.map((r) => (
+            {sortedResources.map((r, rowIdx) => (
               <tr
                 key={r.id}
-                className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="border-b border-gray-100 dark:border-gray-700"
               >
-                <td className="px-4 py-2 font-mono group/cell">
-                  <span className="flex items-center gap-1.5">
+                <td
+                  className={`px-4 py-2 font-mono group/cell cursor-cell cell-selectable ${isCellSelected(rowIdx, 0) ? "cell-selected" : ""}`}
+                  onMouseDown={(e) => handleCellMouseDown(rowIdx, 0, e)}
+                  onMouseEnter={() => handleCellMouseEnter(rowIdx, 0)}
+                >
+                  <span className="relative z-[1] flex items-center gap-1.5">
                     <button
                       className="text-blue-500 hover:text-blue-400 hover:underline text-left"
                       onClick={() => onSelect(r.id)}
@@ -128,34 +241,54 @@ export default function ResourceTable({ onSelect }: Props) {
                     <CopyButton text={r.name} />
                   </span>
                 </td>
-                <td className="px-4 py-2 group/cell">
-                  <span className="flex items-center gap-1.5">
+                <td
+                  className={`px-4 py-2 group/cell cursor-cell cell-selectable ${isCellSelected(rowIdx, 1) ? "cell-selected" : ""}`}
+                  onMouseDown={(e) => handleCellMouseDown(rowIdx, 1, e)}
+                  onMouseEnter={() => handleCellMouseEnter(rowIdx, 1)}
+                >
+                  <span className="relative z-[1] flex items-center gap-1.5">
                     {r.cluster}
                     <CopyButton text={r.cluster} />
                   </span>
                 </td>
-                <td className="px-4 py-2 group/cell">
-                  <span className="flex items-center gap-1.5">
+                <td
+                  className={`px-4 py-2 group/cell cursor-cell cell-selectable ${isCellSelected(rowIdx, 2) ? "cell-selected" : ""}`}
+                  onMouseDown={(e) => handleCellMouseDown(rowIdx, 2, e)}
+                  onMouseEnter={() => handleCellMouseEnter(rowIdx, 2)}
+                >
+                  <span className="relative z-[1] flex items-center gap-1.5">
                     {r.namespace}
                     <CopyButton text={r.namespace} />
                   </span>
                 </td>
-                <td className="px-4 py-2 group/cell">
-                  <span className="flex items-center gap-1.5">
+                <td
+                  className={`px-4 py-2 group/cell cursor-cell cell-selectable ${isCellSelected(rowIdx, 3) ? "cell-selected" : ""}`}
+                  onMouseDown={(e) => handleCellMouseDown(rowIdx, 3, e)}
+                  onMouseEnter={() => handleCellMouseEnter(rowIdx, 3)}
+                >
+                  <span className="relative z-[1] flex items-center gap-1.5">
                     <span className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-0.5 rounded text-xs font-medium">
                       {r.kind}
                     </span>
                     <CopyButton text={r.kind} />
                   </span>
                 </td>
-                <td className="px-4 py-2 text-gray-500 group/cell">
-                  <span className="flex items-center gap-1.5">
+                <td
+                  className={`px-4 py-2 text-gray-500 group/cell cursor-cell cell-selectable ${isCellSelected(rowIdx, 4) ? "cell-selected" : ""}`}
+                  onMouseDown={(e) => handleCellMouseDown(rowIdx, 4, e)}
+                  onMouseEnter={() => handleCellMouseEnter(rowIdx, 4)}
+                >
+                  <span className="relative z-[1] flex items-center gap-1.5">
                     {new Date(r.firstSeen).toLocaleDateString()}
                     <CopyButton text={new Date(r.firstSeen).toLocaleDateString()} />
                   </span>
                 </td>
-                <td className="px-4 py-2 text-gray-500 group/cell">
-                  <span className="flex items-center gap-1.5">
+                <td
+                  className={`px-4 py-2 text-gray-500 group/cell cursor-cell cell-selectable ${isCellSelected(rowIdx, 5) ? "cell-selected" : ""}`}
+                  onMouseDown={(e) => handleCellMouseDown(rowIdx, 5, e)}
+                  onMouseEnter={() => handleCellMouseEnter(rowIdx, 5)}
+                >
+                  <span className="relative z-[1] flex items-center gap-1.5">
                     {new Date(r.lastSeen).toLocaleDateString()}
                     <CopyButton text={new Date(r.lastSeen).toLocaleDateString()} />
                   </span>
@@ -172,8 +305,13 @@ export default function ResourceTable({ onSelect }: Props) {
           </tbody>
         </table>
       </div>
-      <div className="p-3 text-xs text-gray-400 border-t border-gray-200 dark:border-gray-700">
-        {resources.length} resources shown
+      <div className="p-3 text-xs text-gray-400 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
+        <span>{resources.length} resources shown</span>
+        {selection && selectionCount > 0 && (
+          <span className="text-blue-500">
+            {selectionCount} cell{selectionCount > 1 ? "s" : ""} selected — Cmd+C to copy
+          </span>
+        )}
       </div>
     </div>
   );
