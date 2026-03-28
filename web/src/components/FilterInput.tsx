@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   label: string;
@@ -10,6 +11,7 @@ interface Props {
 
 export interface FilterInputHandle {
   toggle: () => void;
+  anchorRef?: React.RefObject<HTMLSpanElement | null>;
 }
 
 const FilterInput = forwardRef<FilterInputHandle, Props>(
@@ -19,6 +21,8 @@ const FilterInput = forwardRef<FilterInputHandle, Props>(
     const wrapperRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLUListElement>(null);
+    const anchorRef = useRef<HTMLSpanElement>(null);
+    const [portalPos, setPortalPos] = useState<{ top: number; left: number } | null>(null);
 
     useImperativeHandle(forwardedRef, () => ({
       toggle() {
@@ -29,7 +33,15 @@ const FilterInput = forwardRef<FilterInputHandle, Props>(
           return !o;
         });
       },
+      anchorRef,
     }));
+
+    // Update portal position when open in compact mode
+    useEffect(() => {
+      if (!open || !compact || !anchorRef.current) return;
+      const rect = anchorRef.current.getBoundingClientRect();
+      setPortalPos({ top: rect.bottom + 4, left: rect.left });
+    }, [open, compact]);
 
     const filtered = options.filter((o) =>
       o.toLowerCase().includes(value.toLowerCase()),
@@ -41,7 +53,11 @@ const FilterInput = forwardRef<FilterInputHandle, Props>(
 
     useEffect(() => {
       function handleClick(e: MouseEvent) {
-        if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        const target = e.target as Node;
+        if (
+          wrapperRef.current && !wrapperRef.current.contains(target) &&
+          (!anchorRef.current || !anchorRef.current.contains(target))
+        ) {
           setOpen(false);
         }
       }
@@ -97,37 +113,46 @@ const FilterInput = forwardRef<FilterInputHandle, Props>(
     }, [highlighted]);
 
     if (compact) {
-      // Headless mode: no visible input, just the dropdown when open
-      if (!open) return null;
-      return (
-        <div ref={wrapperRef} className="absolute z-20 mt-1 left-0 min-w-[12rem]">
-          <input
-            ref={inputRef}
-            className="w-full border rounded px-2 py-1 text-xs bg-white dark:bg-gray-700 dark:border-gray-600 placeholder:text-gray-400"
-            placeholder={`Filter ${label}...`}
-            value={value}
-            onChange={(e) => {
-              onChange(e.target.value);
-            }}
-            onKeyDown={handleKeyDown}
-            autoFocus
-          />
+      // Headless mode: anchor span + portal dropdown
+      if (!open) return <span ref={anchorRef} />;
+      const dropdown = (
+        <div
+          ref={wrapperRef}
+          className="fixed z-50 min-w-[12rem] normal-case text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-lg shadow-lg overflow-hidden"
+          style={portalPos ? { top: portalPos.top, left: portalPos.left } : { visibility: "hidden" }}
+        >
+          <div className="relative border-b dark:border-gray-600">
+            <input
+              ref={inputRef}
+              className="w-full px-2 py-1.5 pr-6 text-xs bg-transparent placeholder:text-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
+              placeholder={`Filter ${label}...`}
+              value={value}
+              onChange={(e) => {
+                onChange(e.target.value);
+              }}
+              onKeyDown={handleKeyDown}
+              autoFocus
+            />
+            {value && (
+              <button
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                onClick={() => {
+                  onChange("");
+                  inputRef.current?.focus();
+                }}
+                tabIndex={-1}
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
           {filtered.length > 0 && (
             <ul
               ref={listRef}
-              className="mt-1 w-full bg-white dark:bg-gray-700 border dark:border-gray-600 rounded shadow-lg max-h-48 overflow-y-auto text-sm"
+              className="max-h-48 overflow-y-auto text-sm"
             >
-              {value && (
-                <li
-                  className="px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-gray-400 italic"
-                  onClick={() => {
-                    onChange("");
-                    setOpen(false);
-                  }}
-                >
-                  Clear filter
-                </li>
-              )}
               {filtered.map((o, i) => (
                 <li
                   key={o}
@@ -152,39 +177,52 @@ const FilterInput = forwardRef<FilterInputHandle, Props>(
           )}
         </div>
       );
+      return (
+        <>
+          <span ref={anchorRef} />
+          {createPortal(dropdown, document.body)}
+        </>
+      );
     }
 
     // Standard mode: visible input with dropdown
     return (
       <div ref={wrapperRef} className="relative">
-        <input
-          ref={inputRef}
-          className="border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600 w-44"
-          placeholder={`Filter ${label}...`}
-          value={value}
-          onChange={(e) => {
-            onChange(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={handleKeyDown}
-        />
+        <div className={`border rounded-lg bg-white dark:bg-gray-700 dark:border-gray-600 w-44 ${open && filtered.length > 0 ? "rounded-b-none" : ""}`}>
+          <div className="relative">
+            <input
+              ref={inputRef}
+              className="w-full px-3 py-1.5 pr-7 text-sm bg-transparent text-gray-800 dark:text-gray-200 focus:outline-none"
+              placeholder={`Filter ${label}...`}
+              value={value}
+              onChange={(e) => {
+                onChange(e.target.value);
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={handleKeyDown}
+            />
+            {value && (
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                onClick={() => {
+                  onChange("");
+                  inputRef.current?.focus();
+                }}
+                tabIndex={-1}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
         {open && filtered.length > 0 && (
           <ul
             ref={listRef}
-            className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 border dark:border-gray-600 rounded shadow-lg max-h-48 overflow-y-auto text-sm min-w-[10rem]"
+            className="absolute z-10 w-full bg-white dark:bg-gray-700 border border-t-0 dark:border-gray-600 rounded-b-lg shadow-lg max-h-48 overflow-y-auto text-sm min-w-[10rem]"
           >
-            {value && (
-              <li
-                className="px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-gray-400 italic"
-                onClick={() => {
-                  onChange("");
-                  setOpen(false);
-                }}
-              >
-                Clear filter
-              </li>
-            )}
             {filtered.map((o, i) => (
               <li
                 key={o}
