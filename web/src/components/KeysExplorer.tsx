@@ -153,6 +153,13 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
         render: (e) => <DateCell value={e.firstSeen} />,
         className: "text-xs text-gray-500",
       },
+      {
+        key: "lastSeen",
+        label: "Last Seen",
+        getValue: (e) => new Date(e.lastSeen).toLocaleDateString(),
+        render: (e) => <DateCell value={e.lastSeen} />,
+        className: "text-xs text-gray-500",
+      },
     ],
     [options, allKeys, onSelectResource],
   );
