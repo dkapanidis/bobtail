@@ -8,6 +8,7 @@ import (
 )
 
 // resourceLevelFields maps groupBy values that refer to columns on the resources table.
+// These values are never user-supplied — they come from a hardcoded allowlist.
 var resourceLevelFields = map[string]string{
 	"kind":      "r.kind",
 	"cluster":   "r.cluster",
