@@ -124,7 +124,7 @@ const FilterInput = forwardRef<FilterInputHandle, Props>(
           <div className="relative border-b dark:border-gray-600">
             <input
               ref={inputRef}
-              className="w-full px-2 py-1.5 pr-6 text-xs bg-transparent placeholder:text-gray-400 text-gray-800 dark:text-gray-200 focus:outline-none"
+              className="filter-dropdown-input w-full px-2 py-1.5 pr-6 text-xs bg-transparent placeholder:text-gray-400 text-gray-800 dark:text-gray-200"
               placeholder={`Filter ${label}...`}
               value={value}
               onChange={(e) => {
@@ -192,7 +192,7 @@ const FilterInput = forwardRef<FilterInputHandle, Props>(
           <div className="relative">
             <input
               ref={inputRef}
-              className="w-full px-3 py-1.5 pr-7 text-sm bg-transparent text-gray-800 dark:text-gray-200 focus:outline-none"
+              className="filter-dropdown-input w-full px-3 py-1.5 pr-7 text-sm bg-transparent text-gray-800 dark:text-gray-200"
               placeholder={`Filter ${label}...`}
               value={value}
               onChange={(e) => {

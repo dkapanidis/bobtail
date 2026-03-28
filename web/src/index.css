@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+*:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.filter-dropdown-input:focus,
+.filter-dropdown-input:focus-visible,
 .recharts-wrapper *:focus,
 .recharts-wrapper *:focus-visible {
   outline: none !important;
