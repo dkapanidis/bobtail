@@ -1,9 +1,12 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { fetchResources, fetchFilterOptions } from "../api/client";
 import type { Resource, FilterOptions } from "../types";
 import FilterInput from "./FilterInput";
 import type { FilterInputHandle } from "./FilterInput";
 import DatePicker from "./DatePicker";
+
+type SortKey = "name" | "cluster" | "namespace" | "kind" | "firstSeen" | "lastSeen";
+type SortDir = "asc" | "desc" | null;
 
 interface Props {
   onSelect: (id: number) => void;
@@ -25,6 +28,8 @@ export default function ResourceTable({ onSelect }: Props) {
     kind: "",
     name: "",
   });
+  const [sortKey, setSortKey] = useState<SortKey | null>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const refs = {
     cluster: useRef<FilterInputHandle>(null),
@@ -47,6 +52,28 @@ export default function ResourceTable({ onSelect }: Props) {
     fetchResources(params).then(setResources);
   }, [filters, asOf]);
 
+  function cycleSort(key: SortKey) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+    } else if (sortDir === "asc") {
+      setSortDir("desc");
+    } else {
+      setSortKey(null);
+      setSortDir(null);
+    }
+  }
+
+  const sortedResources = useMemo(() => {
+    if (!sortKey || !sortDir) return resources;
+    return [...resources].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [resources, sortKey, sortDir]);
+
   const hasFilters = filters.cluster || filters.namespace || filters.kind || filters.name;
 
   return (
@@ -68,24 +95,24 @@ export default function ResourceTable({ onSelect }: Props) {
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
             <tr>
-              <ThFilter label="Name" value={filters.name} onToggle={() => refs.name.current?.toggle()}>
+              <ThFilter label="Name" value={filters.name} sortDir={sortKey === "name" ? sortDir : null} onSort={() => cycleSort("name")} onFilter={() => refs.name.current?.toggle()}>
                 <FilterInput ref={refs.name} label="name" value={filters.name} options={options.names} onChange={(v) => setFilters((f) => ({ ...f, name: v }))} compact />
               </ThFilter>
-              <ThFilter label="Cluster" value={filters.cluster} onToggle={() => refs.cluster.current?.toggle()}>
+              <ThFilter label="Cluster" value={filters.cluster} sortDir={sortKey === "cluster" ? sortDir : null} onSort={() => cycleSort("cluster")} onFilter={() => refs.cluster.current?.toggle()}>
                 <FilterInput ref={refs.cluster} label="cluster" value={filters.cluster} options={options.clusters} onChange={(v) => setFilters((f) => ({ ...f, cluster: v }))} compact />
               </ThFilter>
-              <ThFilter label="Namespace" value={filters.namespace} onToggle={() => refs.namespace.current?.toggle()}>
+              <ThFilter label="Namespace" value={filters.namespace} sortDir={sortKey === "namespace" ? sortDir : null} onSort={() => cycleSort("namespace")} onFilter={() => refs.namespace.current?.toggle()}>
                 <FilterInput ref={refs.namespace} label="namespace" value={filters.namespace} options={options.namespaces} onChange={(v) => setFilters((f) => ({ ...f, namespace: v }))} compact />
               </ThFilter>
-              <ThFilter label="Kind" value={filters.kind} onToggle={() => refs.kind.current?.toggle()}>
+              <ThFilter label="Kind" value={filters.kind} sortDir={sortKey === "kind" ? sortDir : null} onSort={() => cycleSort("kind")} onFilter={() => refs.kind.current?.toggle()}>
                 <FilterInput ref={refs.kind} label="kind" value={filters.kind} options={options.kinds} onChange={(v) => setFilters((f) => ({ ...f, kind: v }))} compact />
               </ThFilter>
-              <th className="px-4 py-3">First Seen</th>
-              <th className="px-4 py-3">Last Seen</th>
+              <ThSortable label="First Seen" sortDir={sortKey === "firstSeen" ? sortDir : null} onSort={() => cycleSort("firstSeen")} />
+              <ThSortable label="Last Seen" sortDir={sortKey === "lastSeen" ? sortDir : null} onSort={() => cycleSort("lastSeen")} />
             </tr>
           </thead>
           <tbody>
-            {resources.map((r) => (
+            {sortedResources.map((r) => (
               <tr
                 key={r.id}
                 className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -152,33 +179,64 @@ export default function ResourceTable({ onSelect }: Props) {
   );
 }
 
+function SortIcon({ dir }: { dir: SortDir }) {
+  if (dir === "asc") {
+    return (
+      <svg className="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+      </svg>
+    );
+  }
+  if (dir === "desc") {
+    return (
+      <svg className="w-3 h-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    );
+  }
+  return null;
+}
+
 function ThFilter({
   label,
   value,
-  onToggle,
+  sortDir,
+  onSort,
+  onFilter,
   children,
 }: {
   label: string;
   value: string;
-  onToggle: () => void;
+  sortDir: SortDir;
+  onSort: () => void;
+  onFilter: () => void;
   children: React.ReactNode;
 }) {
   return (
     <th className="px-4 py-3 relative">
-      <span
-        className="flex items-center gap-1.5 cursor-pointer hover:text-blue-500 select-none"
-        onClick={onToggle}
-      >
-        {label}
+      <span className="flex items-center gap-1.5 select-none">
+        <span
+          className="cursor-pointer hover:text-blue-500 flex items-center gap-1"
+          onClick={onSort}
+        >
+          {label}
+          <SortIcon dir={sortDir} />
+        </span>
         {value ? (
-          <span className="text-blue-500 normal-case font-normal text-xs truncate max-w-[6rem]">({value})</span>
+          <span
+            className="text-blue-500 normal-case font-normal text-xs truncate max-w-[6rem] cursor-pointer hover:text-blue-400"
+            onClick={onFilter}
+          >
+            ({value})
+          </span>
         ) : (
           <svg
-            className="w-3 h-3 text-gray-400 opacity-40"
+            className="w-3 h-3 text-gray-400 opacity-40 cursor-pointer hover:opacity-100"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
             strokeWidth={2}
+            onClick={onFilter}
           >
             <path
               strokeLinecap="round"
@@ -189,6 +247,28 @@ function ThFilter({
         )}
       </span>
       {children}
+    </th>
+  );
+}
+
+function ThSortable({
+  label,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  sortDir: SortDir;
+  onSort: () => void;
+}) {
+  return (
+    <th className="px-4 py-3">
+      <span
+        className="flex items-center gap-1 cursor-pointer hover:text-blue-500 select-none"
+        onClick={onSort}
+      >
+        {label}
+        <SortIcon dir={sortDir} />
+      </span>
     </th>
   );
 }
