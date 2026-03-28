@@ -20,7 +20,12 @@ func (s *Server) getFilterOptions(w http.ResponseWriter, r *http.Request) {
 		Names:      []string{},
 	}
 
+	allowedColumns := map[string]bool{"cluster": true, "namespace": true, "kind": true, "name": true}
+
 	queryDistinct := func(column string) ([]string, error) {
+		if !allowedColumns[column] {
+			return nil, nil
+		}
 		rows, err := s.db.Query("SELECT DISTINCT " + column + " FROM resources WHERE deleted = 0 ORDER BY " + column)
 		if err != nil {
 			return nil, err

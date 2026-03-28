@@ -145,15 +145,17 @@ func (s *Server) queryTimeseries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Default date range: last 7 days
+	var startParam, endParam string
+	var startIsDefault, endIsDefault bool
 	if start == "" {
-		start = "date('now', '-7 days')"
+		startIsDefault = true
 	} else {
-		start = "date('" + sanitizeDateParam(start) + "')"
+		startParam = sanitizeDateParam(start)
 	}
 	if end == "" {
-		end = "date('now')"
+		endIsDefault = true
 	} else {
-		end = "date('" + sanitizeDateParam(end) + "')"
+		endParam = sanitizeDateParam(end)
 	}
 
 	interval := r.URL.Query().Get("interval")
@@ -171,17 +173,36 @@ func (s *Server) queryTimeseries(w http.ResponseWriter, r *http.Request) {
 		dateStep = "+1 day"
 	}
 
+	// Build the date CTE with parameterized start/end
+	var dateArgs []any
+	var startExpr, endExpr string
+	if startIsDefault {
+		startExpr = "date('now', '-7 days')"
+	} else {
+		startExpr = "date(?)"
+		dateArgs = append(dateArgs, startParam)
+	}
+	if endIsDefault {
+		endExpr = "date('now')"
+	} else {
+		endExpr = "date(?)"
+		dateArgs = append(dateArgs, endParam)
+	}
+
+	// dateStep comes from a fixed switch, safe to interpolate
+	dateCTE := `WITH RECURSIVE dates(d) AS (
+		SELECT ` + startExpr + `
+		UNION ALL
+		SELECT DATE(d, '` + dateStep + `') FROM dates WHERE d < ` + endExpr + `
+	) `
+
 	var query string
 	var args []any
+	args = append(args, dateArgs...)
 
 	if col, ok := resourceLevelFields[groupBy]; ok {
 		// Resource-level field: expand dates against resources table directly
-		query = `
-			WITH RECURSIVE dates(d) AS (
-				SELECT ` + start + `
-				UNION ALL
-				SELECT DATE(d, '` + dateStep + `') FROM dates WHERE d < ` + end + `
-			)
+		query = dateCTE + `
 			SELECT dates.d, ` + col + `, COUNT(*)
 			FROM dates
 			JOIN resources r ON DATE(r.first_seen) <= dates.d AND DATE(r.last_seen) >= dates.d
@@ -198,12 +219,7 @@ func (s *Server) queryTimeseries(w http.ResponseWriter, r *http.Request) {
 		`
 	} else {
 		// Key-value key: existing behavior
-		query = `
-			WITH RECURSIVE dates(d) AS (
-				SELECT ` + start + `
-				UNION ALL
-				SELECT DATE(d, '` + dateStep + `') FROM dates WHERE d < ` + end + `
-			)
+		query = dateCTE + `
 			SELECT dates.d, rv.value, COUNT(DISTINCT rv.resource_id)
 			FROM dates
 			JOIN resource_values rv ON DATE(rv.first_seen) <= dates.d AND DATE(rv.last_seen) >= dates.d AND rv.key = ?
@@ -267,22 +283,15 @@ func applyFilter(r *http.Request, query string, args []any) (string, []any) {
 	}
 
 	// Subquery: resource must have a current value matching the filter
-	op := "="
-	switch filterOp {
-	case "eq", "":
-		op = "="
-	case "neq":
-		op = "!="
-	case "gt":
-		op = ">"
-	case "gte":
-		op = ">="
-	case "lt":
-		op = "<"
-	case "lte":
-		op = "<="
-	case "like":
-		op = "LIKE"
+	// Only allow known operators to prevent injection
+	allowedOps := map[string]string{
+		"eq": "=", "": "=",
+		"neq": "!=", "gt": ">", "gte": ">=",
+		"lt": "<", "lte": "<=", "like": "LIKE",
+	}
+	op, ok := allowedOps[filterOp]
+	if !ok {
+		return query, args
 	}
 
 	// Determine column and bind value based on type
