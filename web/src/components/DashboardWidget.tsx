@@ -52,6 +52,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
   const [data, setData] = useState<GroupByResult[]>([]);
   const [tsData, setTsData] = useState<TimeseriesPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState<7 | 30>(7);
 
   useEffect(() => {
     const params = { kind: config.query.kind, groupBy: config.query.groupBy };
@@ -59,7 +60,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
     if (config.type === "timeseries") {
       const now = new Date();
       const start = new Date(now);
-      start.setDate(start.getDate() - 7);
+      start.setDate(start.getDate() - range);
       const startStr = formatDate(start);
       const endStr = formatDate(now);
       fetchTimeseries({ ...params, start: startStr, end: endStr })
@@ -70,7 +71,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
         .then(setData)
         .finally(() => setLoading(false));
     }
-  }, [config.query.kind, config.query.groupBy, config.type]);
+  }, [config.query.kind, config.query.groupBy, config.type, range]);
 
   if (loading) {
     return (
@@ -161,7 +162,24 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
 
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold mb-4">{config.title}</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">{config.title}</h3>
+          <div className="flex items-center gap-1">
+            {([7, 30] as const).map((r) => (
+              <button
+                key={r}
+                className={`px-2 py-1 rounded text-xs ${
+                  range === r
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200"
+                }`}
+                onClick={() => setRange(r)}
+              >
+                {r}d
+              </button>
+            ))}
+          </div>
+        </div>
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={chartData}>

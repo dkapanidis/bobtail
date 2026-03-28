@@ -89,6 +89,7 @@ export default function QueryBuilder() {
   const [filterOp, setFilterOp] = useState("eq");
   const [filterValue, setFilterValue] = useState("");
   const [interval, setInterval] = useState("day");
+  const [range, setRange] = useState<7 | 30>(7);
   const [view, setView] = useState<ViewMode>("bar");
 
   // DSL bar state
@@ -281,7 +282,7 @@ export default function QueryBuilder() {
 
     const now = new Date();
     const start = new Date(now);
-    start.setDate(start.getDate() - 7);
+    start.setDate(start.getDate() - range);
     const startStr = formatDate(start);
     const endStr = formatDate(now);
     params.start = startStr;
@@ -294,7 +295,7 @@ export default function QueryBuilder() {
         setTimeseriesResults(fillMissingDates(ts, startStr, endStr, interval));
       })
       .finally(() => setLoading(false));
-  }, [kind, groupBy, filterKey, filterOp, filterValue, interval]);
+  }, [kind, groupBy, filterKey, filterOp, filterValue, interval, range]);
 
   // Auto-run when key params change
   useEffect(() => {
@@ -447,22 +448,40 @@ export default function QueryBuilder() {
           </div>
         )}
 
-        {/* Interval is always visible */}
-        <div className="flex items-center gap-3">
-          <label className="text-xs text-gray-500">Interval:</label>
-          {(["day", "week", "month"] as const).map((i) => (
-            <button
-              key={i}
-              className={`px-2 py-1 rounded text-xs ${
-                interval === i
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200"
-              }`}
-              onClick={() => setInterval(i)}
-            >
-              {i === "day" ? "Daily" : i === "week" ? "Weekly" : "Monthly"}
-            </button>
-          ))}
+        {/* Interval and range controls */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-500">Range:</label>
+            {([7, 30] as const).map((r) => (
+              <button
+                key={r}
+                className={`px-2 py-1 rounded text-xs ${
+                  range === r
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200"
+                }`}
+                onClick={() => setRange(r)}
+              >
+                {r}d
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-500">Interval:</label>
+            {(["day", "week", "month"] as const).map((i) => (
+              <button
+                key={i}
+                className={`px-2 py-1 rounded text-xs ${
+                  interval === i
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200"
+                }`}
+                onClick={() => setInterval(i)}
+              >
+                {i === "day" ? "Daily" : i === "week" ? "Weekly" : "Monthly"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
