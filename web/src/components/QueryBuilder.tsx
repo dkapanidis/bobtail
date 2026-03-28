@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   fetchFilterOptions,
   fetchKeys,
@@ -13,6 +13,8 @@ import type {
 } from "../types";
 import { parseQuery, serializeQuery, getSuggestions } from "../lib/queryDsl";
 import FilterInput from "./FilterInput";
+import DataTable from "./DataTable";
+import type { ColumnDef } from "./DataTable";
 import {
   BarChart,
   Bar,
@@ -515,53 +517,7 @@ export default function QueryBuilder() {
 
           <div className="p-4">
             {view === "table" && (
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
-                  <tr>
-                    <th className="px-4 py-3">{groupBy}</th>
-                    <th className="px-4 py-3 text-right">Count</th>
-                    <th className="px-4 py-3">Distribution</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupByResults.map((r, i) => {
-                    const maxCount = groupByResults[0]?.count || 1;
-                    return (
-                      <tr
-                        key={r.value}
-                        className="border-b border-gray-100 dark:border-gray-700"
-                      >
-                        <td className="px-4 py-2 font-mono">{r.value}</td>
-                        <td className="px-4 py-2 text-right font-mono">
-                          {r.count}
-                        </td>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="h-4 rounded"
-                              style={{
-                                width: `${(r.count / maxCount) * 100}%`,
-                                backgroundColor: COLORS[i % COLORS.length],
-                                minWidth: "4px",
-                              }}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {groupByResults.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={3}
-                        className="px-4 py-8 text-center text-gray-400"
-                      >
-                        No results
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              <QueryTable groupBy={groupBy} data={groupByResults} />
             )}
 
             {view === "bar" && (
@@ -610,5 +566,53 @@ export default function QueryBuilder() {
         </div>
       )}
     </div>
+  );
+}
+
+function QueryTable({ groupBy, data }: { groupBy: string; data: GroupByResult[] }) {
+  const maxCount = data[0]?.count || 1;
+  const columns: ColumnDef<GroupByResult>[] = useMemo(
+    () => [
+      {
+        key: "value",
+        label: groupBy,
+        getValue: (r) => r.value,
+        className: "font-mono",
+        defaultSort: "asc" as const,
+      },
+      {
+        key: "count",
+        label: "Count",
+        getValue: (r) => String(r.count),
+        className: "text-right font-mono",
+      },
+      {
+        key: "distribution",
+        label: "Distribution",
+        getValue: (r) => String(r.count),
+        render: (r, i) => (
+          <div className="flex items-center gap-2">
+            <div
+              className="h-4 rounded"
+              style={{
+                width: `${(r.count / maxCount) * 100}%`,
+                backgroundColor: COLORS[i % COLORS.length],
+                minWidth: "4px",
+              }}
+            />
+          </div>
+        ),
+      },
+    ],
+    [groupBy, maxCount],
+  );
+
+  return (
+    <DataTable
+      columns={columns}
+      data={data}
+      rowKey={(r) => r.value}
+      emptyMessage="No results"
+    />
   );
 }

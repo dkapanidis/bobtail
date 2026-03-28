@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { fetchGroupBy, fetchTimeseries } from "../api/client";
 import type { WidgetConfig, GroupByResult, TimeseriesPoint } from "../types";
+import DataTable from "./DataTable";
+import type { ColumnDef } from "./DataTable";
 
 function formatDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -115,37 +117,10 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
   }
 
   if (config.type === "table") {
-    const maxCount = data[0]?.count || 1;
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold mb-4">{config.title}</h3>
-        <table className="w-full text-sm text-left">
-          <thead className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
-            <tr>
-              <th className="px-4 py-3">{config.query.groupBy}</th>
-              <th className="px-4 py-3 text-right">Count</th>
-              <th className="px-4 py-3">Distribution</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((r, i) => (
-              <tr key={r.value} className="border-b border-gray-100 dark:border-gray-700">
-                <td className="px-4 py-2 font-mono">{r.value}</td>
-                <td className="px-4 py-2 text-right font-mono">{r.count}</td>
-                <td className="px-4 py-2">
-                  <div
-                    className="h-4 rounded"
-                    style={{
-                      width: `${(r.count / maxCount) * 100}%`,
-                      backgroundColor: COLORS[i % COLORS.length],
-                      minWidth: "4px",
-                    }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DashboardTable groupBy={config.query.groupBy} data={data} />
       </div>
     );
   }
@@ -208,4 +183,52 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
   }
 
   return null;
+}
+
+function DashboardTable({ groupBy, data }: { groupBy: string; data: GroupByResult[] }) {
+  const maxCount = data[0]?.count || 1;
+  const columns: ColumnDef<GroupByResult>[] = useMemo(
+    () => [
+      {
+        key: "value",
+        label: groupBy,
+        getValue: (r) => r.value,
+        className: "font-mono",
+        defaultSort: "asc" as const,
+      },
+      {
+        key: "count",
+        label: "Count",
+        getValue: (r) => String(r.count),
+        className: "text-right font-mono",
+      },
+      {
+        key: "distribution",
+        label: "Distribution",
+        getValue: (r) => String(r.count),
+        render: (r, i) => (
+          <div className="flex items-center gap-2">
+            <div
+              className="h-4 rounded"
+              style={{
+                width: `${(r.count / maxCount) * 100}%`,
+                backgroundColor: COLORS[i % COLORS.length],
+                minWidth: "4px",
+              }}
+            />
+          </div>
+        ),
+      },
+    ],
+    [groupBy, maxCount],
+  );
+
+  return (
+    <DataTable
+      columns={columns}
+      data={data}
+      rowKey={(r) => r.value}
+      emptyMessage="No results"
+    />
+  );
 }
