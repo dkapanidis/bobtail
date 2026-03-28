@@ -42,8 +42,8 @@ export default function DataTable<T>({
     defaultSortCol?.defaultSort ?? null,
   );
 
-  // Filtering
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  // Filtering — each key maps to an array of selected values
+  const [filters, setFilters] = useState<Record<string, string[]>>({});
   const filterRefs = useRef<Record<string, FilterInputHandle | null>>({});
 
   // Selection
@@ -88,12 +88,10 @@ export default function DataTable<T>({
   const filteredData = useMemo(() => {
     return data.filter((row) =>
       columns.every((col) => {
-        const fv = filters[col.key];
-        if (!fv) return true;
-        return col
-          .getValue(row)
-          .toLowerCase()
-          .includes(fv.toLowerCase());
+        const selected = filters[col.key];
+        if (!selected || selected.length === 0) return true;
+        const cellValue = col.getValue(row).toLowerCase();
+        return selected.some((s) => cellValue === s.toLowerCase());
       }),
     );
   }, [data, filters, columns]);
@@ -291,7 +289,7 @@ export default function DataTable<T>({
       Math.max(selection.startCol, selection.endCol) === columns.length - 1
     : false;
 
-  const hasFilters = Object.values(filters).some((v) => v !== "");
+  const hasFilters = Object.values(filters).some((v) => v.length > 0);
 
   return (
     <div
@@ -313,7 +311,7 @@ export default function DataTable<T>({
                   <ThFilter
                     key={col.key}
                     label={col.label}
-                    value={filters[col.key] || ""}
+                    selected={filters[col.key] || []}
                     sortDir={sortKey === col.key ? sortDir : null}
                     onSort={() => cycleSort(col.key)}
                     onFilter={() =>
@@ -325,7 +323,7 @@ export default function DataTable<T>({
                         filterRefs.current[col.key] = el;
                       }}
                       label={col.key}
-                      value={filters[col.key] || ""}
+                      selected={filters[col.key] || []}
                       options={col.filterOptions}
                       onChange={(v) =>
                         setFilters((f) => ({ ...f, [col.key]: v }))
@@ -473,14 +471,14 @@ function SortIcon({ dir }: { dir: SortDir }) {
 
 function ThFilter({
   label,
-  value,
+  selected,
   sortDir,
   onSort,
   onFilter,
   children,
 }: {
   label: string;
-  value: string;
+  selected: string[];
   sortDir: SortDir;
   onSort: () => void;
   onFilter: () => void;
@@ -496,12 +494,12 @@ function ThFilter({
           {label}
           <SortIcon dir={sortDir} />
         </span>
-        {value ? (
+        {selected.length > 0 ? (
           <span
-            className="text-blue-500 normal-case font-normal text-xs truncate max-w-[6rem] cursor-pointer hover:text-blue-400"
+            className="text-blue-500 normal-case font-normal text-xs truncate max-w-[8rem] cursor-pointer hover:text-blue-400"
             onClick={onFilter}
           >
-            ({value})
+            ({selected.join(", ")})
           </span>
         ) : (
           <svg
