@@ -21,7 +21,8 @@
       "Bash(curl -s \"http://localhost:8080/api/resources?asOf=2026-03-18\")",
       "Bash(curl -s \"http://localhost:8080/api/query?groupBy=kind\")",
       "Bash(curl -s \"http://localhost:8080/api/query?groupBy=cluster\")",
-      "Bash(curl -s \"http://localhost:8080/api/query?kind=*&groupBy=kind\")"
+      "Bash(curl -s \"http://localhost:8080/api/query?kind=*&groupBy=kind\")",
+      "Bash(./bobtail ingest:*)"
     ]
   }
 }

@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,8 @@ func Walk(root string) ([]models.DiscoveredResource, error) {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
+		ext := filepath.Ext(path)
+		if info.IsDir() || (ext != ".yaml" && ext != ".json") {
 			return nil
 		}
 
@@ -35,7 +37,7 @@ func Walk(root string) ([]models.DiscoveredResource, error) {
 		cluster := parts[0]
 		namespace := parts[1]
 		kind := parts[2]
-		name := strings.TrimSuffix(parts[3], ".yaml")
+		name := strings.TrimSuffix(parts[3], ext)
 
 		// Never ingest Secrets — they contain sensitive data
 		if strings.EqualFold(kind, "Secret") {
@@ -48,8 +50,15 @@ func Walk(root string) ([]models.DiscoveredResource, error) {
 		}
 
 		var parsed map[string]any
-		if err := yaml.Unmarshal(data, &parsed); err != nil {
-			return fmt.Errorf("parse %s: %w", path, err)
+		switch ext {
+		case ".json":
+			if err := json.Unmarshal(data, &parsed); err != nil {
+				return fmt.Errorf("parse %s: %w", path, err)
+			}
+		default:
+			if err := yaml.Unmarshal(data, &parsed); err != nil {
+				return fmt.Errorf("parse %s: %w", path, err)
+			}
 		}
 
 		values := Flatten(parsed)

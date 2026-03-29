@@ -1,0 +1,49 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "api-gateway",
+    "namespace": "production",
+    "resourceVersion": "789012",
+    "uid": "xyz-456-789",
+    "generation": 12
+  },
+  "spec": {
+    "replicas": 3,
+    "selector": {
+      "matchLabels": {
+        "app": "api-gateway"
+      }
+    },
+    "template": {
+      "spec": {
+        "containers": [
+          {
+            "name": "api-gateway",
+            "image": "api-gateway:v2.1.0",
+            "ports": [
+              {
+                "containerPort": 8080
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              },
+              "limits": {
+                "cpu": "1000m",
+                "memory": "512Mi"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "status": {
+    "replicas": 3,
+    "readyReplicas": 3,
+    "availableReplicas": 3
+  }
+}
