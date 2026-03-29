@@ -25,12 +25,12 @@ type resourceDetailResponse struct {
 }
 
 type valueResponse struct {
-	Key       string   `json:"key"`
-	Value     string   `json:"value"`
-	ValueInt  *int64   `json:"valueInt,omitempty"`
+	Key        string   `json:"key"`
+	Value      string   `json:"value"`
+	ValueInt   *int64   `json:"valueInt,omitempty"`
 	ValueFloat *float64 `json:"valueFloat,omitempty"`
-	FirstSeen string   `json:"firstSeen"`
-	LastSeen  string   `json:"lastSeen"`
+	FirstSeen  string   `json:"firstSeen"`
+	LastSeen   string   `json:"lastSeen"`
 }
 
 func (s *Server) listResources(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func (s *Server) listResources(w http.ResponseWriter, r *http.Request) {
 
 	query += ` ORDER BY cluster, namespace, kind, name`
 
-	limit := 1000
+	limit := 100
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if l, err := strconv.Atoi(v); err == nil && l > 0 && l <= 10000 {
 			limit = l

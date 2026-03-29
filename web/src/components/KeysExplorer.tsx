@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { SetURLSearchParams } from "react-router-dom";
 import { fetchKeyValues, fetchFilterOptions, fetchKeys } from "../api/client";
-import type { KeyValueEntry, FilterOptions } from "../types";
+import type { KeyValueEntry } from "../types";
 import DataTable from "./DataTable";
 import type { ColumnDef } from "./DataTable";
 import DateCell from "./DateCell";
@@ -25,16 +26,7 @@ interface Props {
 }
 
 export default function KeysExplorer({ searchParams, setSearchParams, onSelectResource }: Props) {
-  const [options, setOptions] = useState<FilterOptions>({
-    clusters: [],
-    namespaces: [],
-    kinds: [],
-    names: [],
-  });
   const [asOf, setAsOf] = useState("");
-  const [allKeys, setAllKeys] = useState<string[]>([]);
-  const [entries, setEntries] = useState<KeyValueEntry[]>([]);
-  const [loading, setLoading] = useState(false);
   const [serverFilters, setServerFilters] = useState({
     key: "",
     value: "",
@@ -48,13 +40,15 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
   const valueWrapperRef = useRef<HTMLDivElement>(null);
   const valueInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchFilterOptions().then(setOptions);
-    fetchKeys().then(setAllKeys);
-  }, []);
+  const { data: options = { clusters: [], namespaces: [], kinds: [], names: [], sources: [] } } =
+    useQuery({ queryKey: ["filterOptions"], queryFn: fetchFilterOptions });
 
-  useEffect(() => {
-    setLoading(true);
+  const { data: allKeys = [] } = useQuery({
+    queryKey: ["keys"],
+    queryFn: () => fetchKeys(),
+  });
+
+  const kvParams = useMemo(() => {
     const params: Record<string, string> = {};
     if (serverFilters.key) params.key = serverFilters.key;
     if (serverFilters.value) {
@@ -66,10 +60,13 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
     if (serverFilters.namespace) params.namespace = serverFilters.namespace;
     if (serverFilters.name) params.name = serverFilters.name;
     if (asOf) params.asOf = asOf;
-    fetchKeyValues(params)
-      .then(setEntries)
-      .finally(() => setLoading(false));
+    return params;
   }, [serverFilters, asOf]);
+
+  const { data: entries = [], isLoading: loading } = useQuery({
+    queryKey: ["keyValues", kvParams],
+    queryFn: () => fetchKeyValues(kvParams),
+  });
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

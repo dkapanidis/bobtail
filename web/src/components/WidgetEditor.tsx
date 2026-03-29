@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchFilterOptions, fetchKeys } from "../api/client";
 import type { WidgetConfig } from "../types";
 
@@ -38,20 +39,17 @@ export default function WidgetEditor({ widget, onSave, onCancel }: Props) {
   const [color, setColor] = useState(widget?.color || "text-blue-600");
   const [barColor, setBarColor] = useState(widget?.barColor || "#3b82f6");
 
-  const [kinds, setKinds] = useState<string[]>([]);
-  const [keys, setKeys] = useState<string[]>([]);
+  const { data: kinds = [] } = useQuery({
+    queryKey: ["filterOptions"],
+    queryFn: fetchFilterOptions,
+    select: (opts) => opts.kinds,
+  });
 
-  useEffect(() => {
-    fetchFilterOptions().then((opts) => setKinds(opts.kinds));
-  }, []);
-
-  useEffect(() => {
-    if (kind && kind !== "*") {
-      fetchKeys(kind).then(setKeys);
-    } else {
-      setKeys([]);
-    }
-  }, [kind]);
+  const { data: keys = [] } = useQuery({
+    queryKey: ["keys", kind],
+    queryFn: () => fetchKeys(kind),
+    enabled: !!kind && kind !== "*",
+  });
 
   const groupByOptions = [...RESOURCE_FIELDS, ...keys.filter((k) => !RESOURCE_FIELDS.includes(k))];
 

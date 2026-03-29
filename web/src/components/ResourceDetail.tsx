@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchResource } from "../api/client";
-import type { ResourceDetail as ResourceDetailType, ResourceValue } from "../types";
+import type { ResourceValue } from "../types";
 import DataTable from "./DataTable";
 import type { ColumnDef } from "./DataTable";
 import DateCell from "./DateCell";
@@ -11,11 +12,10 @@ interface Props {
 }
 
 export default function ResourceDetail({ resourceId, onBack }: Props) {
-  const [resource, setResource] = useState<ResourceDetailType | null>(null);
-
-  useEffect(() => {
-    fetchResource(resourceId).then(setResource);
-  }, [resourceId]);
+  const { data: resource } = useQuery({
+    queryKey: ["resource", resourceId],
+    queryFn: () => fetchResource(resourceId),
+  });
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {

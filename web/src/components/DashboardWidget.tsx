@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchGroupBy, fetchTimeseries } from "../api/client";
 import type { WidgetConfig, GroupByResult, TimeseriesPoint } from "../types";
 import DataTable from "./DataTable";
@@ -51,29 +52,38 @@ const tooltipStyle = {
 };
 
 export default function DashboardWidget({ config }: { config: WidgetConfig }) {
-  const [data, setData] = useState<GroupByResult[]>([]);
-  const [tsData, setTsData] = useState<TimeseriesPoint[]>([]);
-  const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<7 | 30>(7);
 
-  useEffect(() => {
-    const params = { kind: config.query.kind, groupBy: config.query.groupBy };
+  const params = useMemo(
+    () => ({ kind: config.query.kind, groupBy: config.query.groupBy }),
+    [config.query.kind, config.query.groupBy],
+  );
 
-    if (config.type === "timeseries") {
-      const now = new Date();
-      const start = new Date(now);
-      start.setDate(start.getDate() - range);
-      const startStr = formatDate(start);
-      const endStr = formatDate(now);
-      fetchTimeseries({ ...params, start: startStr, end: endStr })
-        .then((ts) => setTsData(fillMissingDates(ts, startStr, endStr)))
-        .finally(() => setLoading(false));
-    } else {
-      fetchGroupBy(params)
-        .then(setData)
-        .finally(() => setLoading(false));
-    }
-  }, [config.query.kind, config.query.groupBy, config.type, range]);
+  const tsRange = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(start.getDate() - range);
+    return { start: formatDate(start), end: formatDate(now) };
+  }, [range]);
+
+  const { data: groupByData = [], isLoading: gbLoading } = useQuery({
+    queryKey: ["groupBy", params],
+    queryFn: () => fetchGroupBy(params),
+    enabled: config.type !== "timeseries",
+  });
+
+  const { data: rawTsData, isLoading: tsLoading } = useQuery({
+    queryKey: ["timeseries", params, tsRange],
+    queryFn: () => fetchTimeseries({ ...params, start: tsRange.start, end: tsRange.end }),
+    enabled: config.type === "timeseries",
+  });
+
+  const data = groupByData;
+  const tsData = useMemo(
+    () => rawTsData ? fillMissingDates(rawTsData, tsRange.start, tsRange.end) : [],
+    [rawTsData, tsRange],
+  );
+  const loading = config.type === "timeseries" ? tsLoading : gbLoading;
 
   if (loading) {
     return (

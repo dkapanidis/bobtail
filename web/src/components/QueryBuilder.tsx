@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   fetchFilterOptions,
   fetchKeys,
@@ -7,7 +8,6 @@ import {
 } from "../api/client";
 import type { QueryParams } from "../api/client";
 import type {
-  FilterOptions,
   GroupByResult,
   TimeseriesPoint,
 } from "../types";
@@ -83,12 +83,9 @@ interface QueryBuilderProps {
 }
 
 export default function QueryBuilder({ searchParams, setSearchParams }: QueryBuilderProps) {
-  const [options, setOptions] = useState<FilterOptions>({
-    clusters: [],
-    namespaces: [],
-    kinds: [],
-    names: [],
-  });
+  const { data: options = { clusters: [], namespaces: [], kinds: [], names: [], sources: [] } } =
+    useQuery({ queryKey: ["filterOptions"], queryFn: fetchFilterOptions });
+
   const [keys, setKeys] = useState<string[]>([]);
 
   // Initialize form state from URL params
@@ -136,17 +133,15 @@ export default function QueryBuilder({ searchParams, setSearchParams }: QueryBui
   // Track whether the DSL bar or the form triggered the last update
   const updatingFrom = useRef<"dsl" | "form" | null>(null);
 
-  useEffect(() => {
-    fetchFilterOptions().then(setOptions);
-  }, []);
+  const { data: fetchedKeys = [] } = useQuery({
+    queryKey: ["keys", kind],
+    queryFn: () => fetchKeys(kind),
+    enabled: !!kind,
+  });
 
   useEffect(() => {
-    if (kind) {
-      fetchKeys(kind).then(setKeys);
-    } else {
-      setKeys([]);
-    }
-  }, [kind]);
+    setKeys(kind ? fetchedKeys : []);
+  }, [fetchedKeys, kind]);
 
   // Sync form → DSL
   useEffect(() => {

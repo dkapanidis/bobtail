@@ -440,9 +440,8 @@ export default function DataTable<T>({
             ? ` (filtered from ${data.length})`
             : ""}
         </span>
-        {footer}
         {selection && selectionRowCount > 0 && (
-          <span className="text-blue-500">
+          <span className="text-blue-500 flex-1 text-center">
             {copied ? (
               <>
                 <svg
@@ -475,6 +474,7 @@ export default function DataTable<T>({
             )}
           </span>
         )}
+        {footer}
       </div>
     </div>
   );

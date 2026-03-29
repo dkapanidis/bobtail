@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { SetURLSearchParams } from "react-router-dom";
 import { fetchResources, fetchFilterOptions } from "../api/client";
-import type { Resource, FilterOptions } from "../types";
+import type { Resource } from "../types";
 import DataTable from "./DataTable";
 import type { ColumnDef } from "./DataTable";
 import DateCell from "./DateCell";
@@ -15,15 +16,6 @@ interface Props {
 }
 
 export default function ResourceTable({ searchParams, setSearchParams, onSelect }: Props) {
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [options, setOptions] = useState<FilterOptions>({
-    clusters: [],
-    namespaces: [],
-    kinds: [],
-    names: [],
-    sources: [],
-  });
-
   const asOf = searchParams.get("asOf") || "";
   const initialFilters = useMemo(() => paramsToFilters(searchParams), [searchParams]);
   const initialSort = useMemo(() => paramsToSort(searchParams), [searchParams]);
@@ -37,6 +29,7 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
   }, [setSearchParams]);
 
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>(initialFilters || {});
+  const [limit, setLimit] = useState(100);
 
   const onFiltersChange = useCallback(
     (filters: Record<string, string[]>) => {
@@ -51,11 +44,10 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
     [setSearchParams],
   );
 
-  useEffect(() => {
-    fetchFilterOptions().then(setOptions);
-  }, []);
+  const { data: options = { clusters: [], namespaces: [], kinds: [], names: [], sources: [] } } =
+    useQuery({ queryKey: ["filterOptions"], queryFn: fetchFilterOptions });
 
-  useEffect(() => {
+  const apiParams = useMemo(() => {
     const params: Record<string, string> = {};
     if (asOf) params.asOf = asOf;
     for (const [key, values] of Object.entries(activeFilters)) {
@@ -63,8 +55,14 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
         params[key] = values.join(",");
       }
     }
-    fetchResources(params).then(setResources);
-  }, [asOf, activeFilters]);
+    params.limit = String(limit);
+    return params;
+  }, [asOf, activeFilters, limit]);
+
+  const { data: resources = [] } = useQuery({
+    queryKey: ["resources", apiParams],
+    queryFn: () => fetchResources(apiParams),
+  });
 
   const columns: ColumnDef<Resource>[] = useMemo(
     () => [
@@ -142,6 +140,21 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
         onFiltersChange={onFiltersChange}
         initialSort={initialSort}
         onSortChange={onSortChange}
+        footer={
+          <span className="flex items-center gap-1.5 ml-auto">
+            Show
+            <select
+              className="border rounded px-1.5 py-0.5 text-xs bg-white dark:bg-gray-700 dark:border-gray-600"
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+            >
+              {[50, 100, 250, 500, 1000].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            rows
+          </span>
+        }
       />
     </div>
   );
