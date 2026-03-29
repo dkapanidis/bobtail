@@ -11,10 +11,10 @@ web: ## Build web frontend and copy to embed directory
 	cp -r web/dist internal/api/dist
 
 go: ## Build Go binary
-	go build -o kubernetes-statistics ./cmd/kubernetes-statistics
+	go build -o bobtail ./cmd/bobtail
 
 run: ## Run the server
-	./kubernetes-statistics serve
+	./bobtail serve
 
 clean: ## Remove all build artifacts
-	rm -rf kubernetes-statistics internal/api/dist web/dist web/node_modules
+	rm -rf bobtail internal/api/dist web/dist web/node_modules

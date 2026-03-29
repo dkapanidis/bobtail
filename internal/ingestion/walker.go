@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dkapanidis/kubernetes-statistics/internal/models"
+	"github.com/dkapanidis/bobtail/internal/models"
 	"gopkg.in/yaml.v3"
 )
 

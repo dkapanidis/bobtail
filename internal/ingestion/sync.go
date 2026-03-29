@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/dkapanidis/kubernetes-statistics/internal/models"
+	"github.com/dkapanidis/bobtail/internal/models"
 )
 
 type SyncStats struct {

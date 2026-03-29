@@ -1,4 +1,4 @@
-module github.com/dkapanidis/kubernetes-statistics
+module github.com/dkapanidis/bobtail
 
 go 1.25.5
 

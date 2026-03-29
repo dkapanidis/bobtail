@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dkapanidis/kubernetes-statistics/internal/models"
+	"github.com/dkapanidis/bobtail/internal/models"
 )
 
 var defaultSkipPrefixes = []string{

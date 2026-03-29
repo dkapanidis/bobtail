@@ -1,5 +1,5 @@
 test.db*
-kubernetes-statistics.db*
-kubernetes-statistics
+bobtail.db*
+bobtail
 internal/api/dist/*
 !internal/api/dist/.gitkeep
