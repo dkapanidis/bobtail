@@ -36,6 +36,7 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
     namespace: "",
     name: "",
   });
+  const [limit, setLimit] = useState(100);
   const [valueFilterOpen, setValueFilterOpen] = useState(false);
   const valueWrapperRef = useRef<HTMLDivElement>(null);
   const valueInputRef = useRef<HTMLInputElement>(null);
@@ -60,8 +61,9 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
     if (serverFilters.namespace) params.namespace = serverFilters.namespace;
     if (serverFilters.name) params.name = serverFilters.name;
     if (asOf) params.asOf = asOf;
+    params.limit = String(limit);
     return params;
-  }, [serverFilters, asOf]);
+  }, [serverFilters, asOf, limit]);
 
   const { data: entries = [], isLoading: loading } = useQuery({
     queryKey: ["keyValues", kvParams],
@@ -269,7 +271,24 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
             ? "No matching key-values found"
             : "Enter a key to start exploring"
         }
-        footer={loading ? <span>(loading...)</span> : undefined}
+        footer={
+          <>
+            {loading && <span>(loading...)</span>}
+            <span className="flex items-center gap-1.5 ml-auto">
+              Show
+              <select
+                className="border rounded px-1.5 py-0.5 text-xs bg-white dark:bg-gray-700 dark:border-gray-600"
+                value={limit}
+                onChange={(e) => setLimit(Number(e.target.value))}
+              >
+                {[50, 100, 250, 500, 1000].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+              rows
+            </span>
+          </>
+        }
         toolbar={keysToolbar}
         onClearFilters={clearServerFilters}
         hasExternalFilters={hasServerFilters}
