@@ -11,7 +11,7 @@ web: ## Build web frontend and copy to embed directory
 	cp -r web/dist internal/api/dist
 
 go: ## Build Go binary
-	go build -o bobtail ./cmd/bobtail
+	go install ./cmd/bobtail
 
 run: ## Run the server
 	./bobtail serve

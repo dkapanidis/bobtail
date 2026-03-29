@@ -1,5 +1,4 @@
 test.db*
 bobtail.db*
-bobtail
 internal/api/dist/*
 !internal/api/dist/.gitkeep
