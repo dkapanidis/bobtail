@@ -450,6 +450,49 @@ func applyFilter(r *http.Request, query string, args []any) (string, []any) {
 	return query, args
 }
 
+// applyResourceFilter is like applyFilter but for queries where resources table has no alias.
+func applyResourceFilter(r *http.Request, query string, args []any) (string, []any) {
+	filterKey := r.URL.Query().Get("filterKey")
+	filterOp := r.URL.Query().Get("filterOp")
+	filterValue := r.URL.Query().Get("filterValue")
+
+	if filterKey == "" || filterValue == "" {
+		return query, args
+	}
+
+	allowedOps := map[string]string{
+		"eq": "=", "": "=",
+		"neq": "!=", "gt": ">", "gte": ">=",
+		"lt": "<", "lte": "<=", "like": "LIKE",
+	}
+	op, ok := allowedOps[filterOp]
+	if !ok {
+		return query, args
+	}
+
+	valueCol := "flt.value"
+	var bindValue any = filterValue
+
+	if op == "LIKE" {
+		bindValue = "%" + filterValue + "%"
+	} else if f, err := strconv.ParseFloat(filterValue, 64); err == nil {
+		valueCol = "COALESCE(flt.value_int, flt.value_float)"
+		bindValue = f
+	}
+
+	query += ` AND id IN (
+		SELECT flt.resource_id FROM resource_values flt
+		INNER JOIN (
+			SELECT resource_id, key, MAX(last_seen) as max_ls
+			FROM resource_values WHERE key = ? GROUP BY resource_id, key
+		) fl ON flt.resource_id = fl.resource_id AND flt.key = fl.key AND flt.last_seen = fl.max_ls
+		WHERE flt.key = ? AND ` + valueCol + ` ` + op + ` ?
+	)`
+	args = append(args, filterKey, filterKey, bindValue)
+
+	return query, args
+}
+
 func sanitizeDateParam(s string) string {
 	// Only allow date characters to prevent SQL injection
 	clean := make([]byte, 0, len(s))

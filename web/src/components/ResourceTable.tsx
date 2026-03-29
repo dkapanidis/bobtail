@@ -1,13 +1,24 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { SetURLSearchParams } from "react-router-dom";
-import { fetchResources, fetchFilterOptions } from "../api/client";
+import { fetchResources, fetchFilterOptions, fetchKeys } from "../api/client";
 import { EMPTY_FILTER_OPTIONS, type Resource } from "../types";
 import DataTable from "./DataTable";
 import type { ColumnDef } from "./DataTable";
 import DateCell from "./DateCell";
 import DatePicker from "./DatePicker";
+import FilterInput from "./FilterInput";
 import { paramsToFilters, paramsToSort, writeFilters, writeSort } from "../hooks/useTableParams";
+
+const FILTER_OPS = [
+  { value: "eq", label: "=" },
+  { value: "neq", label: "!=" },
+  { value: "gt", label: ">" },
+  { value: "gte", label: ">=" },
+  { value: "lt", label: "<" },
+  { value: "lte", label: "<=" },
+  { value: "like", label: "~" },
+];
 
 interface Props {
   searchParams: URLSearchParams;
@@ -30,6 +41,30 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
 
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>(initialFilters || {});
   const [limit, setLimit] = useState(100);
+
+  // Key-value filter state
+  const [filterKey, setFilterKey] = useState(searchParams.get("filterKey") || "");
+  const [filterOp, setFilterOp] = useState(searchParams.get("filterOp") || "eq");
+  const [filterValue, setFilterValue] = useState(searchParams.get("filterValue") || "");
+  const [kvFilterOpen, setKvFilterOpen] = useState(false);
+  const kvWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Fetch keys for the filter key combobox
+  const selectedKind = activeFilters.kind?.length === 1 ? activeFilters.kind[0] : undefined;
+  const { data: allKeys = [] } = useQuery({
+    queryKey: ["keys", selectedKind],
+    queryFn: () => fetchKeys(selectedKind),
+  });
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (kvWrapperRef.current && !kvWrapperRef.current.contains(e.target as Node)) {
+        setKvFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const onFiltersChange = useCallback(
     (filters: Record<string, string[]>) => {
@@ -55,9 +90,14 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
         params[key] = values.join(",");
       }
     }
+    if (filterKey && filterValue) {
+      params.filterKey = filterKey;
+      params.filterOp = filterOp;
+      params.filterValue = filterValue;
+    }
     params.limit = String(limit);
     return params;
-  }, [asOf, activeFilters, limit]);
+  }, [asOf, activeFilters, filterKey, filterOp, filterValue, limit]);
 
   const { data: resources = [] } = useQuery({
     queryKey: ["resources", apiParams],
@@ -128,6 +168,75 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
     [options, onSelect],
   );
 
+  const hasKvFilter = filterKey !== "" && filterValue !== "";
+
+  const toolbar = (
+    <>
+      <DatePicker value={asOf} onChange={setAsOf} />
+      <div ref={kvWrapperRef} className="relative">
+        <button
+          className="text-xs text-gray-500 hover:text-blue-500 flex items-center gap-1"
+          onClick={() => setKvFilterOpen((o) => !o)}
+        >
+          Filter by key
+          {hasKvFilter && (
+            <span className="text-blue-500">
+              ({filterKey} {FILTER_OPS.find((o) => o.value === filterOp)?.label} {filterValue})
+            </span>
+          )}
+        </button>
+        {kvFilterOpen && (
+          <div className="absolute z-20 mt-1 left-0 min-w-[22rem] bg-white dark:bg-gray-700 border dark:border-gray-600 rounded shadow-lg p-3 space-y-2">
+            <div className="text-xs text-gray-400 mb-1">Filter resources by key-value</div>
+            <div className="flex gap-1.5 items-center">
+              <div className="flex-1">
+                <FilterInput
+                  label="key"
+                  value={filterKey}
+                  options={allKeys}
+                  onChange={setFilterKey}
+                />
+              </div>
+            </div>
+            <div className="flex gap-1.5 items-center">
+              <select
+                className="border rounded px-1.5 py-1.5 text-xs bg-white dark:bg-gray-700 dark:border-gray-600"
+                value={filterOp}
+                onChange={(e) => setFilterOp(e.target.value)}
+              >
+                {FILTER_OPS.map((op) => (
+                  <option key={op.value} value={op.value}>{op.label}</option>
+                ))}
+              </select>
+              <input
+                className="flex-1 border rounded px-2 py-1.5 text-xs font-mono bg-white dark:bg-gray-700 dark:border-gray-600 placeholder:text-gray-400"
+                placeholder="value"
+                value={filterValue}
+                onChange={(e) => setFilterValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" || e.key === "Enter") setKvFilterOpen(false);
+                }}
+              />
+            </div>
+            {hasKvFilter && (
+              <button
+                className="text-xs text-gray-400 hover:text-red-500"
+                onClick={() => {
+                  setFilterKey("");
+                  setFilterOp("eq");
+                  setFilterValue("");
+                  setKvFilterOpen(false);
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
       <DataTable
@@ -135,7 +244,7 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
         data={resources}
         rowKey={(r) => r.id}
         emptyMessage="No resources found"
-        toolbar={<DatePicker value={asOf} onChange={setAsOf} />}
+        toolbar={toolbar}
         initialFilters={initialFilters}
         onFiltersChange={onFiltersChange}
         initialSort={initialSort}

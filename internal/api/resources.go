@@ -58,6 +58,9 @@ func (s *Server) listResources(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Apply key-value filter (filterKey/filterOp/filterValue)
+	query, args = applyResourceFilter(r, query, args)
+
 	query += ` ORDER BY cluster, namespace, kind, name`
 
 	limit := 100
