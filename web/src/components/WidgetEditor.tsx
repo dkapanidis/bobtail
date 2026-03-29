@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchFilterOptions, fetchKeys } from "../api/client";
 import type { WidgetConfig } from "../types";
+import FilterInput from "./FilterInput";
 
 const TYPES: WidgetConfig["type"][] = ["counter", "bar", "table", "timeseries"];
 const RESOURCE_FIELDS = ["kind", "cluster", "namespace", "name"];
@@ -103,29 +104,22 @@ export default function WidgetEditor({ widget, onSave, onCancel }: Props) {
 
         <div>
           <label className="block text-xs text-gray-500 mb-1">Kind</label>
-          <select
-            className="w-full border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
+          <FilterInput
+            label="kind"
             value={kind}
-            onChange={(e) => setKind(e.target.value)}
-          >
-            <option value="*">* (all)</option>
-            {kinds.map((k) => (
-              <option key={k} value={k}>{k}</option>
-            ))}
-          </select>
+            options={["*", ...kinds]}
+            onChange={(v) => setKind(v)}
+          />
         </div>
 
         <div>
           <label className="block text-xs text-gray-500 mb-1">Group By</label>
-          <select
-            className="w-full border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
+          <FilterInput
+            label="group by"
             value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value)}
-          >
-            {groupByOptions.map((k) => (
-              <option key={k} value={k}>{k}</option>
-            ))}
-          </select>
+            options={groupByOptions}
+            onChange={(v) => setGroupBy(v)}
+          />
         </div>
 
         {type === "counter" && (
