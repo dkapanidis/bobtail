@@ -28,6 +28,9 @@ export async function fetchResources(params?: {
   name?: string;
   source?: string;
   asOf?: string;
+  filterKey?: string;
+  filterOp?: string;
+  filterValue?: string;
   limit?: number;
   offset?: number;
 }): Promise<Resource[]> {
@@ -38,6 +41,9 @@ export async function fetchResources(params?: {
   if (params?.name) query.set("name", params.name);
   if (params?.source) query.set("source", params.source);
   if (params?.asOf) query.set("asOf", params.asOf);
+  if (params?.filterKey) query.set("filterKey", params.filterKey);
+  if (params?.filterOp) query.set("filterOp", params.filterOp);
+  if (params?.filterValue) query.set("filterValue", params.filterValue);
   if (params?.limit) query.set("limit", String(params.limit));
   if (params?.offset) query.set("offset", String(params.offset));
   const res = await fetch(`${BASE}/resources?${query}`);

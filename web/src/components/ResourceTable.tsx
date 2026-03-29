@@ -42,26 +42,45 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>(initialFilters || {});
   const [limit, setLimit] = useState(100);
 
-  // Key-value filter state
-  const [filterKey, setFilterKey] = useState(searchParams.get("filterKey") || "");
-  const [filterOp, setFilterOp] = useState(searchParams.get("filterOp") || "eq");
-  const [filterValue, setFilterValue] = useState(searchParams.get("filterValue") || "");
+  // Key-value filter state — synced to URL
+  const [filterKey, setFilterKeyRaw] = useState(searchParams.get("filterKey") || "");
+  const [filterOp, setFilterOpRaw] = useState(searchParams.get("filterOp") || "eq");
+  const [filterValue, setFilterValueRaw] = useState(searchParams.get("filterValue") || "");
+
+  const syncKvParam = useCallback((key: string, value: string, defaultValue = "") => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value && value !== defaultValue) next.set(key, value);
+      else next.delete(key);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const setFilterKey = useCallback((v: string) => { setFilterKeyRaw(v); syncKvParam("filterKey", v); }, [syncKvParam]);
+  const setFilterOp = useCallback((v: string) => { setFilterOpRaw(v); syncKvParam("filterOp", v, "eq"); }, [syncKvParam]);
+  const setFilterValue = useCallback((v: string) => { setFilterValueRaw(v); syncKvParam("filterValue", v); }, [syncKvParam]);
   const [kvFilterOpen, setKvFilterOpen] = useState(false);
   const kvWrapperRef = useRef<HTMLDivElement>(null);
 
-  // Debounced key search for the filter key combobox
-  const [keySearch, setKeySearch] = useState("");
-  const [debouncedKeySearch, setDebouncedKeySearch] = useState("");
+  const LABEL_PREFIX = "metadata.labels.";
+
+  // Debounced label search for the filter combobox
+  const [labelSearch, setLabelSearch] = useState("");
+  const [debouncedLabelSearch, setDebouncedLabelSearch] = useState("");
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedKeySearch(keySearch), 250);
+    const timer = setTimeout(() => setDebouncedLabelSearch(labelSearch), 250);
     return () => clearTimeout(timer);
-  }, [keySearch]);
+  }, [labelSearch]);
 
   const selectedKind = activeFilters.kind?.length === 1 ? activeFilters.kind[0] : undefined;
-  const { data: keyOptions = [] } = useQuery({
-    queryKey: ["keys", selectedKind, debouncedKeySearch],
-    queryFn: () => fetchKeys(selectedKind, debouncedKeySearch, 100),
+  const labelSearchQuery = LABEL_PREFIX + debouncedLabelSearch;
+  const { data: rawLabelKeys = [] } = useQuery({
+    queryKey: ["keys", selectedKind, labelSearchQuery],
+    queryFn: () => fetchKeys(selectedKind, labelSearchQuery, 100),
   });
+  const labelOptions = rawLabelKeys
+    .filter((k) => k.startsWith(LABEL_PREFIX))
+    .map((k) => k.slice(LABEL_PREFIX.length));
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -98,7 +117,7 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
       }
     }
     if (filterKey && filterValue) {
-      params.filterKey = filterKey;
+      params.filterKey = LABEL_PREFIX + filterKey;
       params.filterOp = filterOp;
       params.filterValue = filterValue;
     }
@@ -185,7 +204,7 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
           className="text-xs text-gray-500 hover:text-blue-500 flex items-center gap-1"
           onClick={() => setKvFilterOpen((o) => !o)}
         >
-          Filter by key
+          Filter by label
           {hasKvFilter && (
             <span className="text-blue-500">
               ({filterKey} {FILTER_OPS.find((o) => o.value === filterOp)?.label} {filterValue})
@@ -194,15 +213,15 @@ export default function ResourceTable({ searchParams, setSearchParams, onSelect 
         </button>
         {kvFilterOpen && (
           <div className="absolute z-20 mt-1 left-0 min-w-[22rem] bg-white dark:bg-gray-700 border dark:border-gray-600 rounded shadow-lg p-3 space-y-2">
-            <div className="text-xs text-gray-400 mb-1">Filter resources by key-value</div>
+            <div className="text-xs text-gray-400 mb-1">Filter resources by label</div>
             <div className="flex gap-1.5 items-center">
               <div className="flex-1">
                 <FilterInput
-                  label="key"
+                  label="label"
                   value={filterKey}
-                  options={keyOptions}
+                  options={labelOptions}
                   onChange={setFilterKey}
-                  onSearch={setKeySearch}
+                  onSearch={setLabelSearch}
                 />
               </div>
             </div>
