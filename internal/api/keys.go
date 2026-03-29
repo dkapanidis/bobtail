@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type keyEntry struct {
@@ -52,8 +53,18 @@ func (s *Server) listKeyValues(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if v := r.URL.Query().Get("key"); v != "" {
-		query += ` AND LOWER(rv.key) LIKE LOWER(?)`
-		args = append(args, v+"%")
+		values := strings.Split(v, ",")
+		if len(values) == 1 {
+			query += ` AND LOWER(rv.key) LIKE LOWER(?)`
+			args = append(args, v+"%")
+		} else {
+			placeholders := make([]string, len(values))
+			for i, val := range values {
+				placeholders[i] = "?"
+				args = append(args, strings.TrimSpace(val))
+			}
+			query += ` AND rv.key IN (` + strings.Join(placeholders, ",") + `)`
+		}
 	}
 	if v := r.URL.Query().Get("value"); v != "" {
 		op := r.URL.Query().Get("op")
@@ -89,21 +100,30 @@ func (s *Server) listKeyValues(w http.ResponseWriter, r *http.Request) {
 			args = append(args, v)
 		}
 	}
-	if v := r.URL.Query().Get("kind"); v != "" {
-		query += ` AND LOWER(r.kind) LIKE LOWER(?)`
-		args = append(args, v+"%")
-	}
-	if v := r.URL.Query().Get("cluster"); v != "" {
-		query += ` AND LOWER(r.cluster) LIKE LOWER(?)`
-		args = append(args, v+"%")
-	}
-	if v := r.URL.Query().Get("namespace"); v != "" {
-		query += ` AND LOWER(r.namespace) LIKE LOWER(?)`
-		args = append(args, v+"%")
-	}
-	if v := r.URL.Query().Get("name"); v != "" {
-		query += ` AND LOWER(r.name) LIKE LOWER(?)`
-		args = append(args, "%"+v+"%")
+	for _, col := range []struct{ param, sqlCol string }{
+		{"kind", "r.kind"},
+		{"cluster", "r.cluster"},
+		{"namespace", "r.namespace"},
+		{"name", "r.name"},
+	} {
+		if v := r.URL.Query().Get(col.param); v != "" {
+			values := strings.Split(v, ",")
+			if len(values) == 1 {
+				query += ` AND LOWER(` + col.sqlCol + `) LIKE LOWER(?)`
+				if col.param == "name" {
+					args = append(args, "%"+v+"%")
+				} else {
+					args = append(args, v+"%")
+				}
+			} else {
+				placeholders := make([]string, len(values))
+				for i, val := range values {
+					placeholders[i] = "?"
+					args = append(args, strings.TrimSpace(val))
+				}
+				query += ` AND ` + col.sqlCol + ` IN (` + strings.Join(placeholders, ",") + `)`
+			}
+		}
 	}
 
 	query += ` ORDER BY r.cluster, r.namespace, r.kind, r.name, rv.key`

@@ -27,14 +27,15 @@ interface Props {
 
 export default function KeysExplorer({ searchParams, setSearchParams, onSelectResource }: Props) {
   const [asOf, setAsOf] = useState("");
+  const initFilters = useMemo(() => paramsToFilters(searchParams), []);
   const [serverFilters, setServerFilters] = useState({
-    key: "",
+    key: initFilters.key?.join(",") || "",
     value: "",
     op: "eq",
-    kind: "",
-    cluster: "",
-    namespace: "",
-    name: "",
+    kind: initFilters.kind?.join(",") || "",
+    cluster: initFilters.cluster?.join(",") || "",
+    namespace: initFilters.namespace?.join(",") || "",
+    name: initFilters.name?.join(",") || "",
   });
   const [limit, setLimit] = useState(100);
   const [valueFilterOpen, setValueFilterOpen] = useState(false);
@@ -82,6 +83,22 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // Sync DataTable column filters to server-side filters
+  const handleFiltersChange = useCallback(
+    (filters: Record<string, string[]>) => {
+      writeFilters(setSearchParams, filters);
+      setServerFilters((prev) => ({
+        ...prev,
+        key: filters.key?.join(",") || "",
+        kind: filters.kind?.join(",") || "",
+        cluster: filters.cluster?.join(",") || "",
+        namespace: filters.namespace?.join(",") || "",
+        name: filters.name?.join(",") || "",
+      }));
+    },
+    [setSearchParams],
+  );
 
   const columns: ColumnDef<KeyValueEntry>[] = useMemo(
     () => [
@@ -250,11 +267,6 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
   const initialFilters = useMemo(() => paramsToFilters(searchParams), [searchParams]);
   const initialSort = useMemo(() => paramsToSort(searchParams), [searchParams]);
 
-  const onFiltersChange = useCallback(
-    (filters: Record<string, string[]>) => writeFilters(setSearchParams, filters),
-    [setSearchParams],
-  );
-
   const onSortChange = useCallback(
     (key: string | null, dir: "asc" | "desc" | null) => writeSort(setSearchParams, key, dir),
     [setSearchParams],
@@ -293,7 +305,7 @@ export default function KeysExplorer({ searchParams, setSearchParams, onSelectRe
         onClearFilters={clearServerFilters}
         hasExternalFilters={hasServerFilters}
         initialFilters={initialFilters}
-        onFiltersChange={onFiltersChange}
+        onFiltersChange={handleFiltersChange}
         initialSort={initialSort}
         onSortChange={onSortChange}
       />
