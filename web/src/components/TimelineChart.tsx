@@ -29,27 +29,43 @@ interface TimelineChartProps {
   height?: number | string;
 }
 
-function CustomTooltip({ active, payload, label }: {
+function CustomTooltip({ active, payload, label, highlighted }: {
   active?: boolean;
   payload?: Payload<number, string>[];
   label?: string;
+  highlighted?: string | null;
 }) {
   if (!active || !payload?.length) return null;
+  const showTotal = payload.length > 1;
+  const total = showTotal ? payload.reduce((sum, e) => sum + (Number(e.value) || 0), 0) : 0;
   return (
     <div style={tooltipStyle} className="px-3 py-2 text-sm shadow-lg">
       <div className="mb-1 font-medium">{label}</div>
-      {payload.map((entry) => (
-        <div key={entry.dataKey} className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5">
-            <span
-              className="inline-block w-2.5 h-2.5 rounded-sm"
-              style={{ backgroundColor: entry.color }}
-            />
-            {entry.name}
-          </span>
-          <span className="font-mono tabular-nums">{entry.value}</span>
+      {payload.map((entry) => {
+        const dimmed = highlighted && highlighted !== entry.dataKey;
+        return (
+          <div
+            key={entry.dataKey}
+            className="flex items-center justify-between gap-4"
+            style={{ opacity: dimmed ? 0.35 : 1, fontWeight: highlighted === entry.dataKey ? 600 : 400 }}
+          >
+            <span className="flex items-center gap-1.5">
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-sm"
+                style={{ backgroundColor: entry.color }}
+              />
+              {entry.name}
+            </span>
+            <span className="font-mono tabular-nums">{entry.value}</span>
+          </div>
+        );
+      })}
+      {showTotal && (
+        <div className="flex items-center justify-between gap-4 border-t border-gray-600 mt-1 pt-1 font-medium">
+          <span>Total</span>
+          <span className="font-mono tabular-nums">{total}</span>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -62,6 +78,10 @@ export default function TimelineChart({ data, dataKeys, height = 400 }: Timeline
     setHighlighted((prev) => (prev === key ? null : key));
   }, []);
 
+  const handleAreaClick = useCallback((dataKey: string) => {
+    setHighlighted((prev) => (prev === dataKey ? null : dataKey));
+  }, []);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data}>
@@ -70,7 +90,7 @@ export default function TimelineChart({ data, dataKeys, height = 400 }: Timeline
         <YAxis tick={{ fill: "#9ca3af" }} />
         <Tooltip
           wrapperStyle={{ zIndex: 10 }}
-          content={<CustomTooltip />}
+          content={<CustomTooltip highlighted={highlighted} />}
         />
         <Legend
           verticalAlign="bottom"
@@ -92,6 +112,8 @@ export default function TimelineChart({ data, dataKeys, height = 400 }: Timeline
             stroke={COLORS[i % COLORS.length]}
             fillOpacity={!highlighted || highlighted === v ? 0.6 : 0.05}
             strokeOpacity={!highlighted || highlighted === v ? 1 : 0.1}
+            style={{ cursor: "pointer" }}
+            onClick={() => handleAreaClick(v)}
           />
         ))}
       </AreaChart>
