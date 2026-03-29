@@ -4,6 +4,7 @@ import type {
   Stats,
   FilterOptions,
   GroupByResult,
+  StackedGroupByResult,
   TimeseriesPoint,
   KeyValueEntry,
 } from "../types";
@@ -87,6 +88,7 @@ export interface QueryParams {
   filterKey?: string;
   filterOp?: string;
   filterValue?: string;
+  stackBy?: string;
   start?: string;
   end?: string;
   interval?: string;
@@ -99,6 +101,7 @@ function buildQueryString(params: QueryParams): URLSearchParams {
   if (params.filterKey) q.set("filterKey", params.filterKey);
   if (params.filterOp) q.set("filterOp", params.filterOp);
   if (params.filterValue) q.set("filterValue", params.filterValue);
+  if (params.stackBy) q.set("stackBy", params.stackBy);
   if (params.start) q.set("start", params.start);
   if (params.end) q.set("end", params.end);
   if (params.interval) q.set("interval", params.interval);
@@ -107,6 +110,11 @@ function buildQueryString(params: QueryParams): URLSearchParams {
 
 export async function fetchGroupBy(params: QueryParams): Promise<GroupByResult[]> {
   const res = await fetch(`${BASE}/query?${buildQueryString(params)}`);
+  return res.json();
+}
+
+export async function fetchStackedGroupBy(params: QueryParams): Promise<StackedGroupByResult[]> {
+  const res = await fetch(`${BASE}/query/stacked?${buildQueryString(params)}`);
   return res.json();
 }
 

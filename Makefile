@@ -14,7 +14,7 @@ go: ## Build Go binary
 	go install ./cmd/bobtail
 
 run: ## Run the server
-	./bobtail serve
+	bobtail serve
 
 clean: ## Remove all build artifacts
 	rm -rf bobtail internal/api/dist web/dist web/node_modules

@@ -6,6 +6,15 @@ import FilterInput from "./FilterInput";
 
 const TYPES: WidgetConfig["type"][] = ["counter", "bar", "table", "timeseries"];
 const RESOURCE_FIELDS = ["kind", "cluster", "namespace", "name"];
+const FILTER_OPS = [
+  { value: "eq", label: "=" },
+  { value: "neq", label: "!=" },
+  { value: "gt", label: ">" },
+  { value: "gte", label: ">=" },
+  { value: "lt", label: "<" },
+  { value: "lte", label: "<=" },
+  { value: "like", label: "like" },
+];
 const COUNTER_COLORS = [
   { value: "text-blue-600", label: "Blue" },
   { value: "text-green-600", label: "Green" },
@@ -39,6 +48,10 @@ export default function WidgetEditor({ widget, onSave, onCancel }: Props) {
   );
   const [color, setColor] = useState(widget?.color || "text-blue-600");
   const [barColor, setBarColor] = useState(widget?.barColor || "#3b82f6");
+  const [filterKey, setFilterKey] = useState(widget?.query.filterKey || "");
+  const [filterOp, setFilterOp] = useState(widget?.query.filterOp || "eq");
+  const [filterValue, setFilterValue] = useState(widget?.query.filterValue || "");
+  const [stackBy, setStackBy] = useState(widget?.query.stackBy || "");
 
   const { data: kinds = [] } = useQuery({
     queryKey: ["filterOptions"],
@@ -59,7 +72,14 @@ export default function WidgetEditor({ widget, onSave, onCancel }: Props) {
       id: widget?.id || crypto.randomUUID(),
       type,
       title: title || `${type} - ${groupBy}`,
-      query: { kind, groupBy },
+      query: {
+        kind,
+        groupBy,
+        filterKey: filterKey || undefined,
+        filterOp: filterKey ? filterOp : undefined,
+        filterValue: filterKey ? filterValue || undefined : undefined,
+        stackBy: stackBy || undefined,
+      },
       counterMode: type === "counter" ? counterMode : undefined,
       color: type === "counter" ? color : undefined,
       barColor: type === "bar" ? barColor : undefined,
@@ -121,6 +141,47 @@ export default function WidgetEditor({ widget, onSave, onCancel }: Props) {
             onChange={(v) => setGroupBy(v)}
           />
         </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Filter (optional)</label>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <FilterInput
+                label="key"
+                value={filterKey}
+                options={groupByOptions}
+                onChange={(v) => setFilterKey(v)}
+              />
+            </div>
+            <select
+              className="border rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
+              value={filterOp}
+              onChange={(e) => setFilterOp(e.target.value)}
+            >
+              {FILTER_OPS.map((op) => (
+                <option key={op.value} value={op.value}>{op.label}</option>
+              ))}
+            </select>
+            <input
+              className="flex-1 border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:border-gray-600"
+              value={filterValue}
+              onChange={(e) => setFilterValue(e.target.value)}
+              placeholder="value"
+            />
+          </div>
+        </div>
+
+        {type === "bar" && (
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Stack By (optional)</label>
+            <FilterInput
+              label="stack by"
+              value={stackBy}
+              options={["", ...groupByOptions]}
+              onChange={(v) => setStackBy(v)}
+            />
+          </div>
+        )}
 
         {type === "counter" && (
           <>

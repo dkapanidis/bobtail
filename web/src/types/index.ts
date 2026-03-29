@@ -54,6 +54,11 @@ export interface GroupByResult {
   count: number;
 }
 
+export interface StackedGroupByResult {
+  value: string;
+  stacks: Record<string, number>;
+}
+
 export interface TimeseriesPoint {
   date: string;
   values: Record<string, number>;
@@ -73,6 +78,10 @@ export interface WidgetConfig {
   query: {
     kind?: string;
     groupBy: string;
+    filterKey?: string;
+    filterOp?: string;
+    filterValue?: string;
+    stackBy?: string;
   };
   counterMode?: "total" | "distinct";
   color?: string;

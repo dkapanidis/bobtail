@@ -132,6 +132,136 @@ func (s *Server) queryGroupBy(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
+type stackedResult struct {
+	Value  string         `json:"value"`
+	Stacks map[string]int `json:"stacks"`
+}
+
+// GET /api/query/stacked?kind=Pod&groupBy=cluster&stackBy=namespace
+// Returns counts grouped by groupBy, with sub-counts broken down by stackBy.
+func (s *Server) queryStackedGroupBy(w http.ResponseWriter, r *http.Request) {
+	kind := r.URL.Query().Get("kind")
+	groupBy := r.URL.Query().Get("groupBy")
+	stackBy := r.URL.Query().Get("stackBy")
+	if groupBy == "" || stackBy == "" {
+		http.Error(w, "groupBy and stackBy parameters required", http.StatusBadRequest)
+		return
+	}
+
+	// Resolve groupBy and stackBy columns/joins
+	groupByCol, groupByIsResource := resourceLevelFields[groupBy]
+	stackByCol, stackByIsResource := resourceLevelFields[stackBy]
+
+	var query string
+	var args []any
+
+	switch {
+	case groupByIsResource && stackByIsResource:
+		// Both are resource-level fields
+		query = `SELECT ` + groupByCol + ` as grp, ` + stackByCol + ` as stk, COUNT(*) as cnt
+			FROM resources r WHERE r.deleted = 0`
+		if kind != "" && kind != "*" {
+			query += ` AND r.kind = ?`
+			args = append(args, kind)
+		}
+		query, args = applyFilter(r, query, args)
+		query += ` GROUP BY grp, stk ORDER BY cnt DESC`
+
+	case groupByIsResource && !stackByIsResource:
+		// groupBy is resource-level, stackBy is a key-value key
+		query = `SELECT ` + groupByCol + ` as grp, stk_rv.value as stk, COUNT(DISTINCT r.id) as cnt
+			FROM resources r
+			JOIN resource_values stk_rv ON r.id = stk_rv.resource_id
+			INNER JOIN (
+				SELECT resource_id, key, MAX(last_seen) as max_ls
+				FROM resource_values WHERE key = ? GROUP BY resource_id, key
+			) stk_latest ON stk_rv.resource_id = stk_latest.resource_id AND stk_rv.key = stk_latest.key AND stk_rv.last_seen = stk_latest.max_ls
+			WHERE r.deleted = 0 AND stk_rv.key = ?`
+		args = append(args, stackBy, stackBy)
+		if kind != "" && kind != "*" {
+			query += ` AND r.kind = ?`
+			args = append(args, kind)
+		}
+		query, args = applyFilter(r, query, args)
+		query += ` GROUP BY grp, stk ORDER BY cnt DESC`
+
+	case !groupByIsResource && stackByIsResource:
+		// groupBy is key-value, stackBy is resource-level
+		query = `SELECT grp_rv.value as grp, ` + stackByCol + ` as stk, COUNT(DISTINCT r.id) as cnt
+			FROM resources r
+			JOIN resource_values grp_rv ON r.id = grp_rv.resource_id
+			INNER JOIN (
+				SELECT resource_id, key, MAX(last_seen) as max_ls
+				FROM resource_values WHERE key = ? GROUP BY resource_id, key
+			) grp_latest ON grp_rv.resource_id = grp_latest.resource_id AND grp_rv.key = grp_latest.key AND grp_rv.last_seen = grp_latest.max_ls
+			WHERE r.deleted = 0 AND grp_rv.key = ?`
+		args = append(args, groupBy, groupBy)
+		if kind != "" && kind != "*" {
+			query += ` AND r.kind = ?`
+			args = append(args, kind)
+		}
+		query, args = applyFilter(r, query, args)
+		query += ` GROUP BY grp, stk ORDER BY cnt DESC`
+
+	default:
+		// Both are key-value keys
+		query = `SELECT grp_rv.value as grp, stk_rv.value as stk, COUNT(DISTINCT r.id) as cnt
+			FROM resources r
+			JOIN resource_values grp_rv ON r.id = grp_rv.resource_id
+			INNER JOIN (
+				SELECT resource_id, key, MAX(last_seen) as max_ls
+				FROM resource_values WHERE key = ? GROUP BY resource_id, key
+			) grp_latest ON grp_rv.resource_id = grp_latest.resource_id AND grp_rv.key = grp_latest.key AND grp_rv.last_seen = grp_latest.max_ls
+			JOIN resource_values stk_rv ON r.id = stk_rv.resource_id
+			INNER JOIN (
+				SELECT resource_id, key, MAX(last_seen) as max_ls
+				FROM resource_values WHERE key = ? GROUP BY resource_id, key
+			) stk_latest ON stk_rv.resource_id = stk_latest.resource_id AND stk_rv.key = stk_latest.key AND stk_rv.last_seen = stk_latest.max_ls
+			WHERE r.deleted = 0 AND grp_rv.key = ? AND stk_rv.key = ?`
+		args = append(args, groupBy, stackBy, groupBy, stackBy)
+		if kind != "" && kind != "*" {
+			query += ` AND r.kind = ?`
+			args = append(args, kind)
+		}
+		query, args = applyFilter(r, query, args)
+		query += ` GROUP BY grp, stk ORDER BY cnt DESC`
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	// Collect into map preserving order
+	resultMap := map[string]*stackedResult{}
+	var order []string
+	for rows.Next() {
+		var grp, stk string
+		var cnt int
+		if err := rows.Scan(&grp, &stk, &cnt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		sr, ok := resultMap[grp]
+		if !ok {
+			sr = &stackedResult{Value: grp, Stacks: map[string]int{}}
+			resultMap[grp] = sr
+			order = append(order, grp)
+		}
+		sr.Stacks[stk] = cnt
+	}
+
+	results := make([]stackedResult, 0, len(order))
+	for _, k := range order {
+		results = append(results, *resultMap[k])
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
 // GET /api/query/timeseries?kind=PostgresCluster&groupBy=spec.postgresVersion&start=2026-01-01&end=2026-03-24&interval=day
 // Returns time-series of counts grouped by value, using SCD date expansion.
 // kind is optional (omit or "*" for all). groupBy can be a resource field or key-value key.

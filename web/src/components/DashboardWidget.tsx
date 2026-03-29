@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchGroupBy, fetchTimeseries } from "../api/client";
-import type { WidgetConfig, GroupByResult, TimeseriesPoint } from "../types";
+import { fetchGroupBy, fetchStackedGroupBy, fetchTimeseries } from "../api/client";
+import type { WidgetConfig, GroupByResult, StackedGroupByResult, TimeseriesPoint } from "../types";
 import DataTable from "./DataTable";
 import type { ColumnDef } from "./DataTable";
 
@@ -55,9 +55,18 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
   const [range, setRange] = useState<7 | 30>(7);
 
   const params = useMemo(
-    () => ({ kind: config.query.kind, groupBy: config.query.groupBy }),
-    [config.query.kind, config.query.groupBy],
+    () => ({
+      kind: config.query.kind,
+      groupBy: config.query.groupBy,
+      filterKey: config.query.filterKey,
+      filterOp: config.query.filterOp,
+      filterValue: config.query.filterValue,
+      stackBy: config.query.stackBy,
+    }),
+    [config.query.kind, config.query.groupBy, config.query.filterKey, config.query.filterOp, config.query.filterValue, config.query.stackBy],
   );
+
+  const hasStackBy = !!config.query.stackBy && config.type === "bar";
 
   const tsRange = useMemo(() => {
     const now = new Date();
@@ -69,7 +78,13 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
   const { data: groupByData = [], isLoading: gbLoading } = useQuery({
     queryKey: ["groupBy", params],
     queryFn: () => fetchGroupBy(params),
-    enabled: config.type !== "timeseries",
+    enabled: config.type !== "timeseries" && !hasStackBy,
+  });
+
+  const { data: stackedData = [], isLoading: stackLoading } = useQuery({
+    queryKey: ["stackedGroupBy", params],
+    queryFn: () => fetchStackedGroupBy(params),
+    enabled: hasStackBy,
   });
 
   const { data: rawTsData, isLoading: tsLoading } = useQuery({
@@ -83,7 +98,7 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
     () => rawTsData ? fillMissingDates(rawTsData, tsRange.start, tsRange.end) : [],
     [rawTsData, tsRange],
   );
-  const loading = config.type === "timeseries" ? tsLoading : gbLoading;
+  const loading = config.type === "timeseries" ? tsLoading : hasStackBy ? stackLoading : gbLoading;
 
   if (loading) {
     return (
@@ -110,6 +125,37 @@ export default function DashboardWidget({ config }: { config: WidgetConfig }) {
   }
 
   if (config.type === "bar") {
+    if (hasStackBy && stackedData.length > 0) {
+      // Collect all unique stack keys
+      const allStackKeys = [...new Set(stackedData.flatMap((d) => Object.keys(d.stacks)))].sort();
+      // Transform to flat rows for Recharts
+      const chartData = stackedData.map((d) => {
+        const row: Record<string, string | number> = { value: d.value };
+        for (const sk of allStackKeys) {
+          row[sk] = d.stacks[sk] || 0;
+        }
+        return row;
+      });
+
+      return (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 h-full flex flex-col">
+          <h3 className="text-lg font-semibold mb-4">{config.title}</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="value" tick={{ fill: "#9ca3af" }} />
+              <YAxis tick={{ fill: "#9ca3af" }} />
+              <Tooltip cursor={{ fill: "rgba(55, 65, 81, 0.5)" }} {...tooltipStyle} />
+              <Legend />
+              {allStackKeys.map((sk, i) => (
+                <Bar key={sk} dataKey={sk} stackId="stack" fill={COLORS[i % COLORS.length]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 h-full flex flex-col">
         <h3 className="text-lg font-semibold mb-4">{config.title}</h3>
