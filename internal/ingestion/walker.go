@@ -11,7 +11,39 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func Walk(source, root string) ([]models.DiscoveredResource, error) {
+// ParsePattern splits a path pattern like "testdata/:cluster/:namespace/:kind/"
+// into a root directory (literal prefix) and dynamic segment names.
+// The filename (minus extension) is always used as the resource name.
+func ParsePattern(pattern string) (root string, segments []string) {
+	pattern = filepath.Clean(pattern)
+	parts := strings.Split(pattern, string(filepath.Separator))
+
+	// Literal prefix becomes root
+	var rootParts []string
+	i := 0
+	for ; i < len(parts); i++ {
+		if strings.HasPrefix(parts[i], ":") {
+			break
+		}
+		rootParts = append(rootParts, parts[i])
+	}
+	root = filepath.Join(rootParts...)
+	if root == "" {
+		root = "."
+	}
+
+	// Remaining parts are dynamic segment names (strip leading ':')
+	for ; i < len(parts); i++ {
+		segments = append(segments, strings.TrimPrefix(parts[i], ":"))
+	}
+
+	return root, segments
+}
+
+func Walk(source, pattern string) ([]models.DiscoveredResource, error) {
+	root, segments := ParsePattern(pattern)
+	expectedDepth := len(segments) + 1 // segments + filename
+
 	var resources []models.DiscoveredResource
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -28,16 +60,22 @@ func Walk(source, root string) ([]models.DiscoveredResource, error) {
 			return fmt.Errorf("relative path: %w", err)
 		}
 
-		// Expected: cluster/namespace/kind/name.yaml
 		parts := strings.Split(rel, string(filepath.Separator))
-		if len(parts) != 4 {
+		if len(parts) != expectedDepth {
 			return nil // skip files not matching expected depth
 		}
 
-		cluster := parts[0]
-		namespace := parts[1]
-		kind := parts[2]
-		name := strings.TrimSuffix(parts[3], ext)
+		// Map dynamic segments to fields
+		fields := make(map[string]string)
+		for i, seg := range segments {
+			fields[seg] = parts[i]
+		}
+		fields["name"] = strings.TrimSuffix(parts[len(parts)-1], ext)
+
+		cluster := fields["cluster"]
+		namespace := fields["namespace"]
+		kind := fields["kind"]
+		name := fields["name"]
 
 		// Never ingest Secrets — they contain sensitive data
 		if strings.EqualFold(kind, "Secret") {
